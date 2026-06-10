@@ -19,6 +19,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+if sys.platform.startswith('win'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
+
 
 def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
     lines: List[Dict[str, Any]] = []

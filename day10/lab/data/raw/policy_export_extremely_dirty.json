@@ -1,0 +1,98 @@
+[
+  {
+    "doc_id": "it_helpdesk_faq",
+    "chunk_text": "Để cấu hình email trên thiết bị di động cá nhân, vui lòng liên hệ tổng đài hỗ trợ kỹ thuật tại số máy ext. 9012 hoặc gửi phiếu yêu cầu hỗ trợ qua cổng thông tin nội bộ.",
+    "effective_date": "2026-03-15",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "legacy_forbidden_policy_xyz",
+    "chunk_text": "Tài liệu này không thuộc phạm vi làm sạch và lưu trữ của hệ thống vector database mới.",
+    "effective_date": "2026-01-01",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "",
+    "chunk_text": "Bản ghi này bị khuyết thiếu hoàn toàn trường định danh doc_id nguồn.",
+    "effective_date": "2026-01-01",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "access_control_sop",
+    "chunk_text": "Quy trình kiểm soát truy cập phân hệ mạng lõi của tập đoàn đối với các kỹ sư mạng.",
+    "effective_date": "",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "access_control_sop",
+    "chunk_text": "Tài liệu kiểm soát quyền truy cập với định dạng ngày hiệu lực bị sai lệch.",
+    "effective_date": "ngày 15 tháng 10 năm 2026",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "hr_leave_policy",
+    "chunk_text": "Quy chế nghỉ phép năm của nhân viên ký trước năm 2026 cần phải bị cách ly.",
+    "effective_date": "2025-11-20",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "access_control_sop",
+    "chunk_text": "Quy trình phân quyền hệ thống máy chủ cũ kỹ đã hết hạn hiệu lực.",
+    "effective_date": "2024-05-12",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "hr_leave_policy",
+    "chunk_text": "Theo quy chế cũ, mỗi nhân sự chính thức sẽ được hưởng 10 ngày phép năm hoặc tối đa là 10 ngày làm việc phép năm.",
+    "effective_date": "2026-01-05",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "sla_p1_2026",
+    "chunk_text": "<div>Nội dung không rõ ràng: Quy trình xử lý sự cố P1 khẩn cấp!!! *** Hệ thống CRM đang bị nghẽn mạng nghiêm trọng ### làm việc làm việc làm việc liên tục.</div>",
+    "effective_date": "2026-02-10",
+    "exported_at": "2026/06/10 13:05:00"
+  },
+  {
+    "doc_id": "it_helpdesk_faq",
+    "chunk_text": "Nhân viên quên mật khẩu Active Directory cần gọi điện trực tiếp tới số hotline IT ext. 8888.",
+    "effective_date": "2026-01-20",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "it_helpdesk_faq",
+    "chunk_text": "  Nhân viên quên mật khẩu Active Directory cần gọi điện trực tiếp tới số hotline IT ext. 8888.  ",
+    "effective_date": "2026-01-20",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "policy_refund_v4",
+    "chunk_text": "Yêu cầu hoàn tiền đối với sản phẩm bị lỗi phải được gửi trong vòng 14 ngày làm việc kể từ thời điểm mua hàng.",
+    "effective_date": "2026-01-10",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "policy_refund_v4",
+    "chunk_text": "Ngoại lệ không được hoàn tiền: Tài khoản VIP, dịch vụ đăng ký định kỳ tháng, thẻ cào đã kích hoạt.",
+    "effective_date": "2026-01-10",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "sla_p1_2026",
+    "chunk_text": "SLA P1",
+    "effective_date": "2026-01-01",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "it_helpdesk_faq",
+    "chunk_text": "Tài liệu hướng dẫn khôi phục sự cố máy trạm chi tiết cho nhân viên Helpdesk IT. Bước 1: Khởi động lại máy. Bước 2: Kiểm tra dây cáp mạng LAN. Bước 3: Đảm bảo IP được cấp tự động qua DHCP. Bước 4: Ping Gateway để kiểm định kết nối. Bước 5: Ping DNS 8.8.8.8 để kiểm định kết nối mạng ngoài. Bước 6: Kiểm tra proxy trình duyệt. Bước 7: Xóa cache trình duyệt Chrome/Firefox. Bước 8: Khởi động lại service DNS client. Bước 9: Giải phóng IP và nhận lại IP mới bằng lệnh ipconfig /release và ipconfig /renew. Bước 10: Xóa bảng phân giải DNS bằng lệnh ipconfig /flushdns. Bước 11: Kiểm tra tường lửa Windows Defender Firewall xem có chặn ứng dụng không. Bước 12: Kiểm tra phần mềm diệt virus McAfee xem có cô lập file hệ thống không. Bước 13: Liên hệ quản trị viên hệ thống ext. 9000 nếu các bước trên đều thất bại. Đây là tài liệu tối mật và có độ dài rất lớn nhằm mục đích thử nghiệm hoạt động cắt chunk tối đa và kiểm tra độ dài chunk của pipeline xem có vượt ngưỡng cảnh báo 1000 ký tự hay không. Bản ghi này chắc chắn sẽ vượt mốc 1000 ký tự.",
+    "effective_date": "2026-01-01",
+    "exported_at": "2026-06-10 12:00:00"
+  },
+  {
+    "doc_id": "it_helpdesk_faq",
+    "chunk_text": "<div>  !!! *** ###   </div>",
+    "effective_date": "2026-01-01",
+    "exported_at": "2026-06-10 12:00:00"
+  }
+]

@@ -1,0 +1,2755 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 10 Observability Portal — Command Center Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f1f5f9; /* Soft, clean slate-white background */
+            --bg-card: #ffffff; /* Pure white card panels */
+            --primary: #4f46e5; /* Premium Indigo */
+            --primary-glow: rgba(79, 70, 229, 0.15);
+            --accent: #10b981; /* Emerald Green */
+            --accent-glow: rgba(16, 185, 129, 0.15);
+            --warning: #d97706; /* Darker Amber warning for light mode readability */
+            --danger: #ef4444; /* Clean Coral Red */
+            --text-main: #0f172a; /* Deep Slate main text */
+            --text-muted: #64748b; /* Medium slate grey for captions */
+            --border-static: #e2e8f0; /* Soft border lines */
+            --border-glow: rgba(79, 70, 229, 0.08);
+            --neon-blue: #0ea5e9; /* Sky Blue */
+            --neon-pink: #d946ef; /* Lavender Violet */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem 1rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Canvas Particles (Light Mode) */
+        #bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Dashboard Wrapper (Clean white glassmorphism) */
+        .dashboard-container {
+            width: 100%;
+            max-width: 1360px;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid var(--border-static);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(0, 0, 0, 0.01);
+            z-index: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: containerEntry 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes containerEntry {
+            from { opacity: 0; transform: translateY(15px) scale(0.995); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Header Command Panel */
+        header {
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid var(--border-static);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #ffffff;
+            position: relative;
+            z-index: 3;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 0.15rem;
+            letter-spacing: -0.02em;
+        }
+
+        .header-title p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .control-badges {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .badge {
+            background: #f8fafc;
+            border: 1px solid var(--border-static);
+            color: var(--text-main);
+            padding: 0.35rem 0.8rem;
+            border-radius: 99px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.3s ease;
+        }
+
+        .badge-pulse {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent);
+            animation: pulseAlpha 1.2s infinite alternate;
+        }
+
+        @keyframes pulseAlpha {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .progress-bar-wrap {
+            width: 100%;
+            height: 3px;
+            background: #e2e8f0;
+            overflow: hidden;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--neon-blue), var(--accent));
+            transition: width 0.3s ease;
+        }
+
+        /* Workspace Grid Split */
+        .workspace {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            min-height: 680px;
+        }
+
+        @media (max-width: 1100px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sidebar Control Panel (Compact layout) */
+        .sidebar {
+            padding: 1.25rem;
+            border-right: 1px solid var(--border-static);
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background: #f5f3ff;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.05);
+        }
+
+        .drop-zone.active-file {
+            border-color: var(--accent);
+            background: #ecfdf5;
+        }
+
+        .drop-zone-icon {
+            font-size: 1.8rem;
+            margin-bottom: 0.4rem;
+            display: inline-block;
+        }
+
+        .drop-zone h3 {
+            font-size: 0.85rem;
+            font-weight: 650;
+            color: #334155;
+            margin-bottom: 0.15rem;
+        }
+
+        .drop-zone p {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .file-info-box {
+            display: none;
+            margin-top: 0.6rem;
+            padding: 0.4rem 0.6rem;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            align-items: center;
+            justify-content: space-between;
+            animation: expandDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes expandDown {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-info-name {
+            font-weight: 600;
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 160px;
+        }
+
+        .file-input { display: none; }
+
+        /* Action Buttons */
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.65rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            flex-grow: 1;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #4338ca;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        .btn-primary:disabled {
+            background: #cbd5e1;
+            color: #94a3b8;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Config Drawer */
+        .sidebar-config-details {
+            border: 1px solid var(--border-static);
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .sidebar-config-summary {
+            padding: 0.6rem 0.85rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+            background: #f8fafc;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .sidebar-config-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .sidebar-config-summary::after {
+            content: '▼';
+            font-size: 0.6rem;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-config-details[open] .sidebar-config-summary::after {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-config-content {
+            padding: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            border-top: 1px solid var(--border-static);
+            font-size: 0.7rem;
+        }
+
+        .config-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .config-field label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .config-field input[type="text"],
+        .config-field input[type="date"],
+        .config-field input[type="number"] {
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 0.35rem 0.5rem;
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .config-field input:focus {
+            border-color: var(--primary);
+        }
+
+        .config-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            cursor: pointer;
+            margin-top: 0.15rem;
+            user-select: none;
+        }
+
+        .config-toggle input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 13px;
+            height: 13px;
+        }
+
+        /* Main Content Layout */
+        .content-panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 1.5rem;
+            background: #ffffff;
+        }
+
+        /* Horizontal Step Progress Flow at the top of content pane */
+        .pipeline-progress-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .flow-step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ffffff;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            border: 2px solid var(--border-static);
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .flow-step-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .flow-step-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #475569;
+        }
+
+        .flow-step-sub {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .flow-line {
+            height: 2px;
+            background: #e2e8f0;
+            flex-grow: 1;
+            margin: 0 0.85rem;
+            position: relative;
+            border-radius: 99px;
+            overflow: hidden;
+            max-width: 60px;
+        }
+
+        @media(max-width: 768px) {
+            .pipeline-progress-flow {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+            .flow-line { display: none; }
+        }
+
+        /* Active State Flow */
+        .flow-step.active .flow-step-icon {
+            background: #e0e7ff;
+            color: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(79, 70, 229, 0.15);
+        }
+        
+        .flow-step.active .flow-step-title {
+            color: var(--primary);
+        }
+
+        /* Completed State Flow */
+        .flow-step.completed .flow-step-icon {
+            background: #d1fae5;
+            color: #059669;
+            border-color: #10b981;
+        }
+
+        .flow-step.completed .flow-step-title {
+            color: #059669;
+        }
+
+        .flow-line.completed {
+            background: #10b981;
+        }
+
+        .flow-line.active::after {
+            content: '';
+            position: absolute;
+            left: -100%;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, var(--primary), var(--neon-blue), transparent);
+            animation: flowRight 1.2s infinite linear;
+        }
+
+        @keyframes flowRight {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        /* Tabs Navigation (Light mode style) */
+        .tab-bar {
+            display: flex;
+            border-bottom: 2px solid var(--border-static);
+            gap: 1.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .tab-item {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.6rem 0.1rem 0.75rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .tab-item:hover {
+            color: var(--text-main);
+        }
+
+        .tab-item.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            max-height: 480px;
+            padding-right: 0.25rem;
+        }
+
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            animation: tabFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .tab-pane.active {
+            display: flex;
+        }
+
+        @keyframes tabFade {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Summary Telemetry Cards (Light Mode) */
+        .dash-summary-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .summary-card {
+            background: #ffffff;
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            padding: 0.85rem 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-1px);
+            border-color: #cbd5e1;
+        }
+
+        .card-total { border-left: 4px solid var(--neon-blue); }
+        .card-cleaned { border-left: 4px solid var(--accent); }
+        .card-quarantined { border-left: 4px solid var(--danger); }
+
+        .summary-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.8rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-top: 0.15rem;
+        }
+
+        .summary-card-lbl {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-total .summary-value { color: var(--neon-blue); }
+        .card-cleaned .summary-value { color: #059669; }
+        .card-quarantined .summary-value { color: #dc2626; }
+
+        /* Dashboard widgets layout */
+        .dashboard-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 850px) {
+            .dashboard-grid-2 { grid-template-columns: 1fr; }
+        }
+
+        .chart-box, .freshness-widget {
+            background: #ffffff;
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .chart-title, .widget-header {
+            font-size: 0.7rem;
+            font-weight: 750;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .freshness-status {
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            background: #f1f5f9;
+            border: 1px solid var(--border-static);
+            color: var(--text-muted);
+        }
+
+        .freshness-status.pass {
+            background: #d1fae5;
+            border-color: #a7f3d0;
+            color: #065f46;
+        }
+
+        .freshness-status.fail {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #991b1b;
+        }
+
+        .freshness-bounds-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .bound-card {
+            background: #f8fafc;
+            border: 1px solid var(--border-static);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .bound-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .bound-desc {
+            font-size: 0.62rem;
+            color: var(--text-muted);
+            line-height: 1.3;
+        }
+
+        .bound-meter {
+            width: 100%;
+            height: 5px;
+            background: #e2e8f0;
+            border-radius: 99px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bound-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 99px;
+            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .bound-fill.warning-fill {
+            background: var(--warning);
+        }
+
+        .bound-fill.danger-fill {
+            background: var(--danger);
+        }
+
+        .bound-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.65rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        .time-box-large {
+            background: #f5f3ff;
+            border: 1px solid #ddd6fe;
+            border-radius: 12px;
+            padding: 0.85rem 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .time-box-title {
+            font-weight: 700;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--primary);
+        }
+
+        .time-counter-large {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.6rem;
+            font-weight: 750;
+            color: var(--primary);
+        }
+
+        /* JSON Preview Drawer */
+        .json-box-wrapper {
+            background: #ffffff;
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .json-box-header {
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-static);
+            padding: 0.6rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .json-box-header-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .json-search-box {
+            display: flex;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 0.2rem 0.45rem;
+            width: 220px;
+        }
+
+        .json-search-box input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.7rem;
+            width: 100%;
+        }
+
+        .json-pre-area {
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: #334155;
+            max-height: 350px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            scroll-behavior: smooth;
+            line-height: 1.45;
+            background: #fafafa;
+        }
+
+        /* Syntax Highlighter for Light Mode */
+        .json-key { color: #a855f7; font-weight: 600; }
+        .json-string { color: #059669; }
+        .json-number { color: #d97706; }
+        .json-boolean { color: #2563eb; }
+        .json-null { color: #dc2626; }
+
+        /* Quarantine Split Workspace */
+        .quarantine-workspace {
+            display: grid;
+            grid-template-columns: 1fr 310px;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .quarantine-workspace { grid-template-columns: 1fr; }
+        }
+
+        .quar-table-wrapper {
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .quar-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.75rem;
+        }
+
+        .quar-table th {
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-static);
+            padding: 0.65rem 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.65rem;
+            letter-spacing: 0.05em;
+        }
+
+        .quar-table td {
+            border-bottom: 1px solid var(--border-static);
+            padding: 0.6rem 0.75rem;
+            color: var(--text-main);
+            vertical-align: middle;
+        }
+
+        .quar-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .badge-reason {
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            display: inline-block;
+        }
+
+        .badge-reason.unknown_doc_id { background: #fef3c7; color: #b45309; }
+        .badge-reason.missing_effective_date { background: #fee2e2; color: #b91c1c; }
+        .badge-reason.invalid_effective_date_format { background: #fee2e2; color: #b91c1c; }
+        .badge-reason.stale_hr_leave_policy_effective_date { background: #f3e8ff; color: #6b21a8; }
+        .badge-reason.stale_access_control_sop_effective_date { background: #f3e8ff; color: #6b21a8; }
+        .badge-reason.stale_hr_policy_text { background: #e0f2fe; color: #0369a1; }
+        .badge-reason.duplicate_chunk_text { background: #f1f5f9; color: #475569; }
+        .badge-reason.missing_chunk_text { background: #fee2e2; color: #b91c1c; }
+
+        .btn-inspect {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-inspect:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: #f5f3ff;
+        }
+
+        /* Quarantine Inspector side panel */
+        .quar-inspect-panel {
+            background: #ffffff;
+            border: 1px solid var(--border-static);
+            border-radius: 12px;
+            padding: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .inspect-header {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-static);
+            padding-bottom: 0.4rem;
+        }
+
+        .inspect-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            font-size: 0.7rem;
+        }
+
+        .inspect-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            background: #f8fafc;
+            padding: 0.45rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-static);
+        }
+
+        .inspect-pre {
+            background: #f8fafc;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: #334155;
+            overflow-x: auto;
+            border: 1px solid #cbd5e1;
+            max-height: 180px;
+            white-space: pre-wrap;
+        }
+
+        .inspect-val-error {
+            border-left: 3px solid var(--danger);
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 0.45rem;
+            border-radius: 0 6px 6px 0;
+            font-weight: 500;
+        }
+
+        /* Validation grid accordion */
+        .suite-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        @media (max-width: 800px) {
+            .suite-grid { grid-template-columns: 1fr; }
+        }
+
+        .suite-card {
+            background: #ffffff;
+            border: 1px solid var(--border-static);
+            border-radius: 10px;
+            padding: 0.65rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.35rem;
+            cursor: pointer;
+            overflow: hidden;
+            max-height: 50px;
+            transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .suite-card.expanded {
+            max-height: 230px;
+        }
+
+        .suite-card.passed {
+            border-color: #a7f3d0;
+            background: #f9fbfb;
+        }
+
+        .suite-card.passed:hover {
+            border-color: #6ee7b7;
+        }
+
+        .suite-card.failed {
+            border-color: #fecaca;
+            background: #fffbfa;
+        }
+
+        .suite-card.failed:hover {
+            border-color: #fca5a5;
+        }
+
+        .suite-card-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .suite-left {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+
+        .suite-name {
+            font-size: 0.75rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: #334155;
+        }
+
+        .suite-desc {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .suite-badge {
+            font-size: 0.6rem;
+            font-weight: 800;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .suite-badge.passed { background: #d1fae5; color: #065f46; }
+        .suite-badge.failed { background: #fee2e2; color: #991b1b; }
+        .suite-badge.pending { background: #f1f5f9; color: var(--text-muted); }
+
+        .suite-card-detail {
+            width: 100%;
+            border-top: 1px solid var(--border-static);
+            padding-top: 0.45rem;
+            margin-top: 0.15rem;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .suite-code-pre {
+            background: #f8fafc;
+            padding: 0.35rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem;
+            color: #334155;
+            overflow-x: auto;
+            border: 1px solid #cbd5e1;
+        }
+
+        /* Dev Telemetry Terminal Console (Slightly dark for visual contrast) */
+        .console-controls {
+            margin: 0 1.5rem;
+            padding: 0.45rem 0.85rem;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+
+        .console-filters {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .filter-btn {
+            background: transparent;
+            border: 1px solid #475569;
+            color: #94a3b8;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.65rem;
+            font-weight: 700;
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active, .filter-btn:hover {
+            border-color: #6366f1;
+            color: #ffffff;
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .console-terminal {
+            margin: 0 1.5rem 1.5rem;
+            background: #0f172a; /* Keep dark slate console for professional coder styling */
+            border: 1px solid #1e293b;
+            border-radius: 0 0 12px 12px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            height: 160px;
+            overflow-y: auto;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.75);
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        /* Telemetry Scanline grid overlay */
+        .console-terminal::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%);
+            z-index: 5;
+            background-size: 100% 3px;
+            pointer-events: none;
+        }
+
+        .terminal-row {
+            line-height: 1.35;
+            animation: slideLine 0.15s ease forwards;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        @keyframes slideLine {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-sys { color: #818cf8; margin-right: 0.4rem; font-weight: 700; flex-shrink: 0; }
+        .log-info { color: #38bdf8; }
+        .log-ok { color: #34d399; }
+        .log-warn { color: #fbbf24; }
+        .log-err { color: #f87171; }
+
+        .console-actions-right {
+            display: flex;
+            gap: 0.45rem;
+            align-items: center;
+        }
+
+        .console-toggle {
+            cursor: pointer;
+            user-select: none;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .console-toggle input {
+            accent-color: #6366f1;
+            margin-right: 3px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+    <div id="chart-tooltip" style="position: absolute; display: none; background: rgba(15, 23, 42, 0.95); color: white; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.65rem; pointer-events: none; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.1); font-family: 'Inter', sans-serif; line-height: 1.35;"></div>
+
+    <div class="dashboard-container">
+        <!-- Header Command Center -->
+        <header>
+            <div class="header-title">
+                <h1>Interactive Command Center</h1>
+                <p>ETL Observability & Data Telemetry Portal</p>
+            </div>
+            <div class="control-badges">
+                <div class="badge"><span class="badge-pulse"></span> PORTAL ACTIVE</div>
+                <div class="badge" id="freshness-badge" style="border-color: #cbd5e1; color: #b45309; background: #fff;">FRESHNESS: SLA PENDING</div>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" id="pipeline-progress-bar"></div>
+            </div>
+        </header>
+
+        <!-- Main Workspace split -->
+        <div class="workspace">
+            <!-- Left Panel: Drag Zone, Configurations -->
+            <div class="sidebar">
+                <!-- Drop Zone -->
+                <div class="drop-zone" id="drop-zone">
+                    <span class="drop-zone-icon">📥</span>
+                    <h3>Kéo thả file JSON</h3>
+                    <p>Hoặc click để duyệt tệp tin</p>
+                    <input type="file" id="file-input" class="file-input" accept=".json">
+                    
+                    <div class="file-info-box" id="file-info-box" style="display: none; flex-direction: column; gap: 0.25rem; align-items: stretch; background: rgba(241, 245, 249, 0.95); border: 1px solid #cbd5e1; padding: 0.6rem; border-radius: 8px; font-size: 0.65rem; text-align: left; margin-top: 0.6rem;">
+                        <div style="display: flex; justify-content: space-between; font-weight: 700; color: var(--text-main); align-items: center;">
+                            <span id="file-name" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 170px;">filename.json</span>
+                            <span style="color: #059669; font-weight: 800; font-size: 0.55rem; background: #d1fae5; padding: 1px 4px; border-radius: 4px;">✓ LOADED</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; border-top: 1px solid #e2e8f0; padding-top: 0.3rem; margin-top: 0.1rem;">
+                            <div>Size: <span id="file-size" style="color: var(--text-main); font-weight: 600;">0 KB</span></div>
+                            <div>Rows: <span id="file-rows" style="color: var(--text-main); font-weight: 600;">0</span></div>
+                            <div style="grid-column: span 2;">Modified: <span id="file-modified" style="color: var(--text-main); font-weight: 600;">-</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Configuration drawer (Closed by default to save space) -->
+                <details class="sidebar-config-details">
+                    <summary class="sidebar-config-summary">⚙️ Cấu hình ETL & Quality Rules</summary>
+                    <div class="sidebar-config-content">
+                        <div class="config-field">
+                            <label>Allowed Doc IDs (cắt dấu phẩy)</label>
+                            <input type="text" id="config-allowed-docs" value="policy_refund_v4, sla_p1_2026, it_helpdesk_faq, hr_leave_policy, access_control_sop">
+                        </div>
+                        <div class="config-field">
+                            <label>Cutoff Date: hr_leave_policy</label>
+                            <input type="date" id="config-hr-cutoff" value="2026-01-01">
+                        </div>
+                        <div class="config-field">
+                            <label>Cutoff Date: access_control_sop</label>
+                            <input type="date" id="config-access-cutoff" value="2026-01-01">
+                        </div>
+                        <div class="config-field">
+                            <label>Độ dài Chunk tối thiểu (E4)</label>
+                            <input type="number" id="config-min-chunk" value="8" min="1">
+                        </div>
+                        <div class="config-field">
+                            <label>Độ dài Chunk tối đa (E11)</label>
+                            <input type="number" id="config-max-chunk" value="1000" min="10">
+                        </div>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="config-rule-dedup" checked>
+                            <span>Deduplicate Sentences (R1)</span>
+                        </label>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="config-rule-phone" checked>
+                            <span>Phone Standardization (R2)</span>
+                        </label>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="config-rule-refund" checked>
+                            <span>Refund Exception Enrichment (R3)</span>
+                        </label>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="config-rule-timestamp" checked>
+                            <span>Timestamp ISO Normalization (R4)</span>
+                        </label>
+                    </div>
+                </details>
+
+                <!-- Simulation Speed Option -->
+                <div class="sidebar-config-details" style="padding: 0.85rem; background: #ffffff; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 0.45rem;">
+                    <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em;">⚡ Tốc độ mô phỏng</label>
+                    <input type="range" id="config-sim-speed" min="0" max="3" value="1" style="width: 100%; accent-color: var(--primary); cursor: pointer;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.55rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-weight: 600;">
+                        <span>Instant</span>
+                        <span>Fast</span>
+                        <span>Medium</span>
+                        <span>Slow</span>
+                    </div>
+                </div>
+
+                <!-- Actions buttons -->
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="run-btn" disabled>
+                        <span>⚡</span> Chạy Pipeline
+                    </button>
+                    <button class="btn btn-secondary" id="reset-btn">
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Horizontal Progress Flow + Tabs -->
+            <div class="content-panel">
+                <!-- Horizontal Progress steps flow -->
+                <div class="pipeline-progress-flow">
+                    <!-- Step 1 -->
+                    <div class="flow-step" id="node-ingest">
+                        <div class="flow-step-icon">📥</div>
+                        <div class="flow-step-text">
+                            <div class="flow-step-title">1. Raw Ingestion</div>
+                            <span class="flow-step-sub" id="sub-ingest">Chờ nạp tệp</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flow-line" id="conn-1"></div>
+
+                    <!-- Step 2 -->
+                    <div class="flow-step" id="node-clean">
+                        <div class="flow-step-icon">✨</div>
+                        <div class="flow-step-text">
+                            <div class="flow-step-title">2. Clean & Rules</div>
+                            <span class="flow-step-sub" id="sub-clean">Lọc & chuẩn hóa</span>
+                        </div>
+                    </div>
+
+                    <div class="flow-line" id="conn-2"></div>
+
+                    <!-- Step 3 -->
+                    <div class="flow-step" id="node-validate">
+                        <div class="flow-step-icon">🛡️</div>
+                        <div class="flow-step-text">
+                            <div class="flow-step-title">3. Quality Check</div>
+                            <span class="flow-step-sub" id="sub-validate">Expectations Suite</span>
+                        </div>
+                    </div>
+
+                    <div class="flow-line" id="conn-3"></div>
+
+                    <!-- Step 4 -->
+                    <div class="flow-step" id="node-embed">
+                        <div class="flow-step-icon">📦</div>
+                        <div class="flow-step-text">
+                            <div class="flow-step-title">4. Publish</div>
+                            <span class="flow-step-sub" id="sub-embed">Manifest Output</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs bar -->
+                <div class="tab-bar">
+                    <div class="tab-item active" id="tab-dash">Dashboard</div>
+                    <div class="tab-item" id="tab-json">Cleaned JSON</div>
+                    <div class="tab-item" id="tab-quar">Quarantine Hub</div>
+                    <div class="tab-item" id="tab-suite">Validation Suite</div>
+                </div>
+
+                <!-- Tabs content panels -->
+                <div class="tab-content-container">
+                    <!-- Tab Pane 1: Dashboard -->
+                    <div class="tab-pane active" id="pane-dash">
+                        <div class="dash-summary-row">
+                            <div class="summary-card card-total">
+                                <div>
+                                    <div class="summary-card-lbl">Raw records</div>
+                                    <div class="summary-value" id="val-raw">0</div>
+                                </div>
+                                <span style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));">📊</span>
+                            </div>
+                            <div class="summary-card card-cleaned">
+                                <div>
+                                    <div class="summary-card-lbl">Cleaned rows</div>
+                                    <div class="summary-value" id="val-clean">0</div>
+                                </div>
+                                <span style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));">💚</span>
+                            </div>
+                            <div class="summary-card card-quarantined">
+                                <div>
+                                    <div class="summary-card-lbl">Quarantined</div>
+                                    <div class="summary-value" id="val-quar">0</div>
+                                </div>
+                                <span style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));">⚠️</span>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-grid-2">
+                            <!-- SVG Bar Chart -->
+                            <div class="chart-box">
+                                <div class="chart-title">📊 PHÂN PHỐI BẢN GHI THEO DOC ID</div>
+                                <svg id="bar-chart" width="100%" height="180" style="background: #f8fafc; border-radius: 8px; border: 1px solid var(--border-static);"></svg>
+                            </div>
+
+                            <!-- Freshness SLAs Widget -->
+                            <div class="freshness-widget">
+                                <div class="widget-header">
+                                    <span>⏱️ KIỂM ĐỊNH DUAL FRESHNESS SLA</span>
+                                    <span class="freshness-status" id="freshness-widget-status">Chờ chạy...</span>
+                                </div>
+                                <div class="freshness-bounds-grid">
+                                    <div class="bound-card">
+                                        <div class="bound-title">Ingestion Boundary (Data Age)</div>
+                                        <div class="bound-desc">Max SLA: 24h. Độ tươi của dữ liệu thô đầu vào so với mốc hiện tại.</div>
+                                        <div class="bound-meter">
+                                            <div class="bound-fill" id="ingest-freshness-fill" style="width: 0%"></div>
+                                        </div>
+                                        <div class="bound-stats">
+                                            <span id="ingest-freshness-val">Chưa đo</span>
+                                            <span style="color: var(--text-muted);">Ngưỡng SLA: 24.0h</span>
+                                        </div>
+                                    </div>
+                                    <div class="bound-card">
+                                        <div class="bound-title">Publish Boundary (Database Age)</div>
+                                        <div class="bound-desc">Max SLA: 1h. Thời gian trễ kể từ lúc xuất bản manifest kết quả.</div>
+                                        <div class="bound-meter">
+                                            <div class="bound-fill" id="publish-freshness-fill" style="width: 0%"></div>
+                                        </div>
+                                        <div class="bound-stats">
+                                            <span id="publish-freshness-val">Chưa đo</span>
+                                            <span style="color: var(--text-muted);">Ngưỡng SLA: 1.0h</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="time-box-large">
+                            <div class="time-left">
+                                <div class="time-box-title">⏱️ THỜI GIAN THỰC THI PIPELINE</div>
+                                <span style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.15rem; display: inline-block;">Đồng hồ đo lường telemetry hiệu năng xử lý client-side</span>
+                            </div>
+                            <div class="time-counter-large" id="large-timer">00:00.000</div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Pane 2: JSON Code Viewer -->
+                    <div class="tab-pane" id="pane-json">
+                        <div class="json-box-wrapper">
+                            <div class="json-box-header">
+                                <span class="json-box-header-title">Cleaned Output Manifest</span>
+                                <div class="console-actions-right" style="gap: 0.45rem; flex-grow: 1; justify-content: flex-end;">
+                                    <div class="json-search-box">
+                                        <input type="text" id="json-search-input" placeholder="Tìm kiếm từ khóa...">
+                                    </div>
+                                    <button class="btn btn-secondary" id="copy-json-btn" style="padding: 0.3rem 0.65rem; font-size: 0.7rem; border-radius: 6px;">
+                                        Sao chép JSON
+                                    </button>
+                                    <button class="btn btn-primary" id="download-btn" style="padding: 0.3rem 0.65rem; font-size: 0.7rem; border-radius: 6px;" disabled>
+                                        Tải Cleaned JSON
+                                    </button>
+                                </div>
+                            </div>
+                            <pre class="json-pre-area" id="json-pre-area">// Đang đợi tải tệp và nhấn nút chạy...</pre>
+                        </div>
+                    </div>
+
+                    <!-- Tab Pane 3: Quarantine Details Inspector -->
+                    <div class="tab-pane" id="pane-quar">
+                        <div class="quarantine-workspace">
+                            <div class="quar-table-wrapper">
+                                <table class="quar-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hàng</th>
+                                            <th>Doc ID</th>
+                                            <th>Lý do cách ly</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="quar-table-body">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem 0;">Chưa có dữ liệu quarantine. Vui lòng nạp và chạy pipeline.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Sidebar inspect details -->
+                            <div class="quar-inspect-panel" id="quar-inspect-panel">
+                                <div class="inspect-header">🕵️ QUARANTINE TELEMETRY INSPECTOR</div>
+                                <div class="inspect-body" id="inspect-body">
+                                    <div style="color: var(--text-muted); text-align: center; margin-top: 3.5rem; font-size: 0.7rem;">Chọn một dòng bị cách ly bên cạnh để kiểm định chi tiết lỗi dữ liệu.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Pane 4: Validation Suite -->
+                    <div class="tab-pane" id="pane-suite">
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.2rem;">
+                            💡 Click vào từng Expectation dưới đây để xem mã logic assertion code và chi tiết xác thực.
+                        </div>
+                        <div class="suite-grid" id="suite-grid">
+                            <!-- Rendered dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal log window header & logs -->
+        <div class="console-controls">
+            <div class="console-filters">
+                <button class="filter-btn active" data-filter="all">All Logs</button>
+                <button class="filter-btn" data-filter="system">System</button>
+                <button class="filter-btn" data-filter="ok">Success</button>
+                <button class="filter-btn" data-filter="warn">Warnings</button>
+                <button class="filter-btn" data-filter="err">Errors</button>
+            </div>
+            <div class="console-actions-right">
+                <label class="console-toggle">
+                    <input type="checkbox" id="terminal-scroll-lock" checked> Auto-Scroll
+                </label>
+                <button class="filter-btn" id="terminal-clear" style="margin-left: 0.4rem;">Dọn dẹp</button>
+                <button class="filter-btn" id="terminal-copy">Sao chép</button>
+                <button class="filter-btn" id="terminal-download">Tải logs</button>
+            </div>
+        </div>
+        <div class="console-terminal" id="console-terminal">
+            <div class="terminal-row" data-type="system"><span class="log-sys">[SYSTEM]</span><span class="log-info">Observability System Initialized. Awaiting JSON upload...</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive light gray Canvas Particles
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+        let mouse = { x: null, y: null, radius: 120 };
+
+        window.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        });
+
+        window.addEventListener('mouseleave', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+
+        function initStars() {
+            stars = [];
+            const count = Math.floor((canvas.width * canvas.height) / 10000);
+            for(let i=0; i<count; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    r: Math.random() * 1.5 + 0.5,
+                    vx: (Math.random() - 0.5) * 0.12,
+                    vy: (Math.random() - 0.5) * 0.12,
+                    a: Math.random() * 0.5 + 0.2,
+                    ad: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1)
+                });
+            }
+        }
+
+        function drawStars() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Faint light grey connections between particles
+            for (let i = 0; i < stars.length; i++) {
+                for (let j = i + 1; j < stars.length; j++) {
+                    const dist = Math.hypot(stars[i].x - stars[j].x, stars[i].y - stars[j].y);
+                    if (dist < 70) {
+                        ctx.strokeStyle = `rgba(79, 70, 229, ${0.05 * (1 - dist/70)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(stars[i].x, stars[i].y);
+                        ctx.lineTo(stars[j].x, stars[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            stars.forEach(star => {
+                ctx.fillStyle = '#6366f1'; // Softer indigo particles
+                ctx.globalAlpha = star.a * 0.12; // Very faint particles in light mode
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+                ctx.fill();
+                
+                star.x += star.vx;
+                star.y += star.vy;
+
+                if (star.x < 0 || star.x > canvas.width) star.vx = -star.vx;
+                if (star.y < 0 || star.y > canvas.height) star.vy = -star.vy;
+
+                if (mouse.x !== null && mouse.y !== null) {
+                    const dx = mouse.x - star.x;
+                    const dy = mouse.y - star.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < mouse.radius) {
+                        ctx.strokeStyle = `rgba(14, 165, 233, ${0.06 * (1 - dist/mouse.radius)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(star.x, star.y);
+                        ctx.lineTo(mouse.x, mouse.y);
+                        ctx.stroke();
+
+                        star.x += dx * 0.003;
+                        star.y += dy * 0.003;
+                    }
+                }
+
+                star.a += star.ad;
+                if (star.a >= 1 || star.a <= 0.1) star.ad = -star.ad;
+            });
+            
+            ctx.globalAlpha = 1.0;
+            requestAnimationFrame(drawStars);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        drawStars();
+
+        // Tabs logic
+        const tabs = ['tab-dash', 'tab-json', 'tab-quar', 'tab-suite'];
+        const panes = ['pane-dash', 'pane-json', 'pane-quar', 'pane-suite'];
+
+        tabs.forEach((tabId, i) => {
+            document.getElementById(tabId).addEventListener('click', () => {
+                tabs.forEach(t => document.getElementById(t).classList.remove('active'));
+                panes.forEach(p => document.getElementById(p).classList.remove('active'));
+
+                document.getElementById(tabId).classList.add('active');
+                document.getElementById(panes[i]).classList.add('active');
+            });
+        });
+
+        // DOM elements binding
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const runBtn = document.getElementById('run-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const copyJsonBtn = document.getElementById('copy-json-btn');
+        const fileInfoBox = document.getElementById('file-info-box');
+        const fileNameSpan = document.getElementById('file-name');
+        const largeTimer = document.getElementById('large-timer');
+        const pipelineProgressBar = document.getElementById('pipeline-progress-bar');
+        const consoleTerminal = document.getElementById('console-terminal');
+        const freshnessBadge = document.getElementById('freshness-badge');
+
+        const configAllowedDocs = document.getElementById('config-allowed-docs');
+        const configHrCutoff = document.getElementById('config-hr-cutoff');
+        const configAccessCutoff = document.getElementById('config-access-cutoff');
+        const configMinChunk = document.getElementById('config-min-chunk');
+        const configMaxChunk = document.getElementById('config-max-chunk');
+        const configRuleDedup = document.getElementById('config-rule-dedup');
+        const configRulePhone = document.getElementById('config-rule-phone');
+        const configRuleRefund = document.getElementById('config-rule-refund');
+        const configRuleTimestamp = document.getElementById('config-rule-timestamp');
+
+        const valRaw = document.getElementById('val-raw');
+        const valClean = document.getElementById('val-clean');
+        const valQuar = document.getElementById('val-quar');
+        const jsonPreArea = document.getElementById('json-pre-area');
+        const quarTableBody = document.getElementById('quar-table-body');
+        const inspectBody = document.getElementById('inspect-body');
+        const suiteGrid = document.getElementById('suite-grid');
+
+        const ingestFreshnessFill = document.getElementById('ingest-freshness-fill');
+        const ingestFreshnessVal = document.getElementById('ingest-freshness-val');
+        const publishFreshnessFill = document.getElementById('publish-freshness-fill');
+        const publishFreshnessVal = document.getElementById('publish-freshness-val');
+        const freshnessWidgetStatus = document.getElementById('freshness-widget-status');
+
+        let rawData = null;
+        let processedData = null;
+        let timerInterval = null;
+        let timerStart = 0;
+        const EVAL_NOW = new Date("2026-06-10T13:59:59+07:00");
+
+        let allLogs = [];
+        const scrollLockCheck = document.getElementById('terminal-scroll-lock');
+        
+        document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                renderLogs(e.target.getAttribute('data-filter'));
+            });
+        });
+
+        document.getElementById('terminal-clear').addEventListener('click', () => {
+            allLogs = [];
+            renderLogs('all');
+        });
+
+        document.getElementById('terminal-copy').addEventListener('click', () => {
+            const txt = allLogs.map(l => `[${l.type.toUpperCase()}] ${l.text}`).join('\n');
+            navigator.clipboard.writeText(txt).then(() => {
+                alert("Đã sao chép logs!");
+            });
+        });
+
+        function writeLog(text, type = 'info') {
+            allLogs.push({ text, type });
+            const currentFilter = document.querySelector('.filter-btn[data-filter].active').getAttribute('data-filter');
+            if (currentFilter === 'all' || (currentFilter === 'system' && type === 'info') || currentFilter === type) {
+                appendLogRow(text, type);
+            }
+        }
+
+        function appendLogRow(text, type) {
+            const row = document.createElement('div');
+            row.className = 'terminal-row';
+            row.setAttribute('data-type', type);
+            let label = 'log-info';
+            if (type === 'ok') label = 'log-ok';
+            if (type === 'warn') label = 'log-warn';
+            if (type === 'err') label = 'log-err';
+
+            row.innerHTML = `<span class="log-sys">[PIPELINE]</span><span class="${label}">${text}</span>`;
+            consoleTerminal.appendChild(row);
+            if (scrollLockCheck.checked) {
+                consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+            }
+        }
+
+        function renderLogs(filter) {
+            consoleTerminal.innerHTML = '';
+            allLogs.forEach(l => {
+                if (filter === 'all' || (filter === 'system' && l.type === 'info') || filter === l.type) {
+                    appendLogRow(l.text, l.type);
+                }
+            });
+        }
+
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            if (!obj) return;
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.textContent = Math.floor(progress * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.textContent = end;
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // Floating Tooltip Helpers
+        const tooltipEl = document.getElementById('chart-tooltip');
+        function showTooltip(e, html) {
+            tooltipEl.innerHTML = html;
+            tooltipEl.style.display = 'block';
+            moveTooltip(e);
+        }
+        function moveTooltip(e) {
+            tooltipEl.style.left = `${e.pageX + 12}px`;
+            tooltipEl.style.top = `${e.pageY - 45}px`;
+        }
+        function hideTooltip() {
+            tooltipEl.style.display = 'none';
+        }
+
+        // Popovers for steps
+        const stepsInfo = {
+            'node-ingest': `<strong>Phase 1: Raw Ingestion</strong><div style="margin-top: 0.25rem; font-size: 0.6rem;">• Tải tệp JSON thô từ drag-and-drop zone.<br>• Phân tích cú pháp chuỗi dữ liệu thô.<br>• Kiểm tra số lượng bản ghi thô đầu vào.</div>`,
+            'node-clean': `<strong>Phase 2: Clean & Rules</strong><div style="margin-top: 0.25rem; font-size: 0.6rem;">• Áp dụng bộ 4 quy tắc chuẩn hóa văn bản.<br>• Khử trùng lặp câu trùng lặp và lặp từ.<br>• Chuẩn hóa hotline extension và timestamp.<br>• Lọc tài liệu stale theo ngày Cutoff.<br>• Chuyển các dòng lỗi sang Quarantine Hub.</div>`,
+            'node-validate': `<strong>Phase 3: Quality Check</strong><div style="margin-top: 0.25rem; font-size: 0.6rem;">• Thực thi bộ 12 kiểm định chất lượng (Expectations).<br>• Xác thực cấu trúc dữ liệu qua Pydantic Schema Model.<br>• Dừng pipeline nếu phát hiện lỗi nghiêm trọng (Halt).<br>• Cảnh báo nếu độ dài chunk không tối ưu (Warn).</div>`,
+            'node-embed': `<strong>Phase 4: Publish & Manifest</strong><div style="margin-top: 0.25rem; font-size: 0.6rem;">• Sinh manifests JSON cho luồng dữ liệu sạch.<br>• Đo lường Ingestion & Publish Freshness SLAs.<br>• Upsert idempotent dữ liệu sạch vào Chroma Vector DB.<br>• Prune dọn sạch vector mồ côi từ phiên bản cũ.</div>`
+        };
+
+        Object.keys(stepsInfo).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.cursor = 'pointer';
+                el.addEventListener('mouseenter', (e) => showTooltip(e, stepsInfo[id]));
+                el.addEventListener('mousemove', (e) => moveTooltip(e));
+                el.addEventListener('mouseleave', () => hideTooltip());
+            }
+        });
+
+        // Logs text download
+        document.getElementById('terminal-download').addEventListener('click', () => {
+            const txt = allLogs.map(l => `[${l.type.toUpperCase()}] ${l.text}`).join('\n');
+            const dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(txt);
+            const anchor = document.createElement('a');
+            anchor.setAttribute("href", dataStr);
+            anchor.setAttribute("download", `pipeline_execution_${Date.now()}.log`);
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+        });
+
+        // Pydantic Schema Validator Helper
+        function validateRowsPydanticDetails(cleaned, allowedDocIds, minChunkLen, maxChunkLen) {
+            let errors = [];
+            cleaned.forEach((r, idx) => {
+                let rowErrors = [];
+                if (!r.chunk_id || typeof r.chunk_id !== 'string' || r.chunk_id.trim().length === 0) {
+                    rowErrors.push("chunk_id: Field cannot be empty");
+                }
+                if (!r.doc_id || typeof r.doc_id !== 'string' || !allowedDocIds.includes(r.doc_id)) {
+                    rowErrors.push(`doc_id: '${r.doc_id}' is not in allowed document list`);
+                }
+                if (!r.chunk_text || typeof r.chunk_text !== 'string' || r.chunk_text.length < minChunkLen) {
+                    rowErrors.push(`chunk_text: text length ${r.chunk_text ? r.chunk_text.length : 0} is less than min_length ${minChunkLen}`);
+                }
+                if (r.chunk_text && r.chunk_text.length > maxChunkLen) {
+                    rowErrors.push(`chunk_text: text length ${r.chunk_text.length} exceeds max_length ${maxChunkLen}`);
+                }
+                if (!r.effective_date || !/^\d{4}-\d{2}-\d{2}$/.test(r.effective_date)) {
+                    rowErrors.push(`effective_date: '${r.effective_date}' is not a valid ISO date (YYYY-MM-DD)`);
+                }
+                if (!r.exported_at || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}$/.test(r.exported_at)) {
+                    rowErrors.push(`exported_at: '${r.exported_at}' is not a valid ISO datetime (YYYY-MM-DDThh:mm:ss)`);
+                }
+
+                if (rowErrors.length > 0) {
+                    errors.push({
+                        index: idx + 1,
+                        chunk_id: r.chunk_id,
+                        details: rowErrors
+                    });
+                }
+            });
+            return {
+                passed: errors.length === 0,
+                errors: errors
+            };
+        }
+
+        function drawChart(cleaned) {
+            const svg = document.getElementById('bar-chart');
+            svg.innerHTML = '';
+            
+            if (!cleaned || cleaned.length === 0) {
+                svg.innerHTML = `<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="var(--text-muted)" font-size="11">Đang đợi chạy pipeline để vẽ biểu đồ...</text>`;
+                return;
+            }
+
+            const allowed = configAllowedDocs.value.split(',').map(s => s.trim()).filter(Boolean);
+            const counts = {};
+            allowed.forEach(d => counts[d] = 0);
+            cleaned.forEach(r => {
+                if (counts[r.doc_id] !== undefined) counts[r.doc_id]++;
+            });
+
+            const maxVal = Math.max(...Object.values(counts), 1);
+            const svgWidth = svg.clientWidth || 400;
+            const svgHeight = 180;
+            const paddingLeft = 120;
+            const paddingRight = 40;
+            const paddingTop = 15;
+            const paddingBottom = 15;
+            
+            const chartWidth = svgWidth - paddingLeft - paddingRight;
+            const chartHeight = svgHeight - paddingTop - paddingBottom;
+            const barHeight = Math.floor(chartHeight / allowed.length) - 6;
+
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `
+                <linearGradient id="grad0" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6366f1" /><stop offset="100%" stop-color="#818cf8" /></linearGradient>
+                <linearGradient id="grad1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#60a5fa" /></linearGradient>
+                <linearGradient id="grad2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0ea5e9" /><stop offset="100%" stop-color="#38bdf8" /></linearGradient>
+                <linearGradient id="grad3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10b981" /><stop offset="100%" stop-color="#34d399" /></linearGradient>
+                <linearGradient id="grad4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d946ef" /><stop offset="100%" stop-color="#e879f9" /></linearGradient>
+            `;
+            svg.appendChild(defs);
+
+            allowed.forEach((doc, idx) => {
+                const count = counts[doc];
+                const wPct = count / maxVal;
+                const targetWidth = Math.max(wPct * chartWidth, 4);
+                const y = paddingTop + idx * (barHeight + 6);
+
+                const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                label.setAttribute("x", "10");
+                label.setAttribute("y", y + barHeight/2 + 4);
+                label.setAttribute("fill", "#64748b");
+                label.setAttribute("font-size", "9");
+                label.setAttribute("font-weight", "600");
+                label.setAttribute("font-family", "'Inter', sans-serif");
+                label.textContent = doc.length > 18 ? doc.substring(0, 16) + "..." : doc;
+                svg.appendChild(label);
+
+                const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                track.setAttribute("x", paddingLeft);
+                track.setAttribute("y", y);
+                track.setAttribute("width", chartWidth);
+                track.setAttribute("height", barHeight);
+                track.setAttribute("rx", "3");
+                track.setAttribute("fill", "#f1f5f9");
+                svg.appendChild(track);
+
+                const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                bar.setAttribute("x", paddingLeft);
+                bar.setAttribute("y", y);
+                bar.setAttribute("width", "0");
+                bar.setAttribute("height", barHeight);
+                bar.setAttribute("rx", "3");
+                bar.setAttribute("fill", `url(#grad${idx % 5})`);
+                svg.appendChild(bar);
+
+                // Add hover interactions
+                bar.style.cursor = 'pointer';
+                bar.style.transition = "width 1s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, transform 0.2s ease";
+                bar.style.transformOrigin = `${paddingLeft}px ${y + barHeight/2}px`;
+                
+                bar.addEventListener('mouseenter', (e) => {
+                    bar.style.opacity = '0.85';
+                    bar.style.transform = 'scaleY(1.15)';
+                    showTooltip(e, `<strong>${doc}</strong><br>Sạch: <strong>${count}</strong> bản ghi`);
+                });
+                bar.addEventListener('mousemove', (e) => moveTooltip(e));
+                bar.addEventListener('mouseleave', () => {
+                    bar.style.opacity = '1';
+                    bar.style.transform = 'scaleY(1)';
+                    hideTooltip();
+                });
+
+                setTimeout(() => {
+                    bar.setAttribute("width", targetWidth);
+                }, 100 + idx * 50);
+
+                const valTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                valTxt.setAttribute("x", paddingLeft + targetWidth + 6);
+                valTxt.setAttribute("y", y + barHeight/2 + 4);
+                valTxt.setAttribute("fill", "#0f172a");
+                valTxt.setAttribute("font-size", "9");
+                valTxt.setAttribute("font-weight", "700");
+                valTxt.setAttribute("opacity", "0");
+                valTxt.textContent = count;
+                svg.appendChild(valTxt);
+
+                setTimeout(() => {
+                    valTxt.style.transition = "opacity 0.4s ease";
+                    valTxt.setAttribute("opacity", "1");
+                }, 850);
+            });
+        }
+
+        drawChart(null);
+
+        function parseDateString(str) {
+            if (!str) return new Date(0);
+            let s = str.toString().trim().replace(/\//g, "-");
+            if (s.includes(" ") && !s.includes("T")) {
+                s = s.replace(" ", "T");
+            }
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? new Date(0) : d;
+        }
+
+        function highlightJSON(json) {
+            if (typeof json != 'string') {
+                 json = JSON.stringify(json, undefined, 2);
+            }
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                var cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key';
+                    } else {
+                        cls = 'string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'null';
+                }
+                return '<span class="json-' + cls + '">' + match + '</span>';
+            });
+        }
+
+        document.getElementById('json-search-input').addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            if (!processedData) return;
+            const highlighted = highlightJSON(processedData);
+            if (!query) {
+                jsonPreArea.innerHTML = highlighted;
+                return;
+            }
+            const escaped = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const regex = new RegExp(`(${escaped})`, 'gi');
+            jsonPreArea.innerHTML = highlighted.replace(regex, '<mark style="background: rgba(245, 158, 11, 0.35); padding: 1px 2px; border-radius: 2px;">$1</mark>');
+        });
+
+        // Expectations suite templates
+        let initialExpectations = [
+            { id: "E1", name: "min_one_row", desc: "Ít nhất có 1 dòng dữ liệu đầu ra hợp lệ", severity: "halt", code: "cleaned.length >= 1" },
+            { id: "E2", name: "no_empty_doc_id", desc: "Không chứa thuộc tính doc_id trống rỗng", severity: "halt", code: "cleaned.every(r => r.doc_id && r.doc_id.trim() !== '')" },
+            { id: "E3", name: "refund_no_stale_14d_window", desc: "Cách ly hoàn toàn thời hạn hoàn tiền 14 ngày", severity: "halt", code: "cleaned.every(r => !(r.doc_id === 'policy_refund_v4' && r.chunk_text.includes('14 ngày làm việc')))" },
+            { id: "E4", name: "chunk_min_length", desc: "Độ dài ký tự chunk tối thiểu (Dynamic)", severity: "warn", code: "cleaned.every(r => r.chunk_text.length >= min_len)" },
+            { id: "E5", name: "effective_date_iso_yyyy_mm_dd", desc: "Ngày hiệu lực đúng chuẩn định dạng ISO YYYY-MM-DD", severity: "halt", code: "cleaned.every(r => /^\\d{4}-\\d{2}-\\d{2}$/.test(r.effective_date))" },
+            { id: "E6", name: "hr_leave_no_stale_10d_annual", desc: "Không còn chính sách 10 ngày phép thường niên cũ", severity: "halt", code: "cleaned.every(r => !(r.doc_id === 'hr_leave_policy' && r.chunk_text.includes('10 ngày phép năm')))" },
+            { id: "E7", name: "min_records_per_doc_id", desc: "Có đầy đủ bản ghi hợp lệ cho các allowed doc_id", severity: "halt", code: "allowed_docs.every(id => cleaned.some(r => r.doc_id === id))" },
+            { id: "E8", name: "no_corrupted_symbols", desc: "Loại bỏ triệt để ký tự rác (!!!, lặp từ, Nội dung...)", severity: "halt", code: "cleaned.every(r => !r.chunk_text.includes('!!!') && !r.chunk_text.includes('làm việc làm việc'))" },
+            { id: "E9", name: "pydantic_schema_validation", desc: "Xác thực Pydantic Model Schema chặt chẽ (chunk_id, dates, types)", severity: "halt", code: "validateRowsPydantic(cleaned)" },
+            { id: "E10", name: "exported_at_iso_format", desc: "exported_at phải tuân thủ chuẩn ISO YYYY-MM-DD HH:MM:SS", severity: "halt", code: "cleaned.every(r => /^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}$/.test(r.exported_at))" },
+            { id: "E11", name: "chunk_max_length", desc: "Độ dài ký tự chunk tối đa (Dynamic)", severity: "warn", code: "cleaned.every(r => r.chunk_text.length <= max_len)" },
+            { id: "E12", name: "no_duplicate_chunk_ids", desc: "Mã chunk_id định dạng duy nhất", severity: "halt", code: "ids.length === new Set(ids).size" }
+        ];
+
+        function renderExpectationsPending() {
+            suiteGrid.innerHTML = '';
+            initialExpectations.forEach(exp => {
+                suiteGrid.innerHTML += `
+                    <div class="suite-card" id="suite-${exp.id}">
+                        <div class="suite-card-header">
+                            <div class="suite-left">
+                                <span class="suite-name">${exp.id}: ${exp.name}</span>
+                                <span class="suite-desc">${exp.desc} (${exp.severity})</span>
+                            </div>
+                            <span class="suite-badge pending" id="badge-${exp.id}">Chờ...</span>
+                        </div>
+                        <div class="suite-card-detail">
+                            <div><strong>Assertion Rule Logic:</strong></div>
+                            <div class="suite-code-pre">${exp.code}</div>
+                            <div id="stat-${exp.id}">Trạng thái: Chưa kiểm nghiệm</div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        renderExpectationsPending();
+
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.suite-card');
+            if (card) {
+                card.classList.toggle('expanded');
+            }
+        });
+
+        // Drag & drop logic
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.json')) {
+                writeLog(`Lỗi: Chỉ chấp nhận tệp định dạng .json. Nhận tệp: ${file.name}`, 'err');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    rawData = Array.isArray(parsed) ? parsed : [parsed];
+                    
+                    const sizeKB = (file.size / 1024).toFixed(1);
+                    const modDate = new Date(file.lastModified).toLocaleString('vi-VN');
+                    
+                    document.getElementById('file-name').textContent = file.name;
+                    document.getElementById('file-size').textContent = `${sizeKB} KB`;
+                    document.getElementById('file-rows').textContent = rawData.length;
+                    document.getElementById('file-modified').textContent = modDate;
+                    
+                    fileInfoBox.style.display = 'flex';
+                    dropZone.classList.add('active-file');
+                    runBtn.disabled = false;
+                    writeLog(`Đã tải thành công tệp tin "${file.name}" (${sizeKB} KB, ${rawData.length} dòng thô, cập nhật: ${modDate}).`, 'ok');
+                } catch (e) {
+                    writeLog(`Lỗi phân tích cú pháp JSON: ${e.message}`, 'err');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Live Timer
+        function runTimer() {
+            timerStart = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = Date.now() - timerStart;
+                const secs = Math.floor(elapsed / 1000);
+                const ms = elapsed % 1000;
+                const mins = Math.floor(secs / 60);
+                const showSecs = secs % 60;
+                largeTimer.textContent = `${mins.toString().padStart(2, '0')}:${showSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+            }, 10);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        // Date normalizing parser
+        function cleanDate(rawDate) {
+            if (!rawDate) return { date: "", err: "empty_effective_date" };
+            let val = rawDate.toString().trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return { date: val, err: "" };
+            let matchTime = /^(\d{4}-\d{2}-\d{2})[T ]\d{2}:\d{2}:\d{2}.*$/.exec(val);
+            if (matchTime) return { date: matchTime[1], err: "" };
+            let matchSlash = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(val);
+            if (matchSlash) return { date: `${matchSlash[3]}-${matchSlash[2]}-${matchSlash[1]}`, err: "" };
+            let matchYmdSlash = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(val);
+            if (matchYmdSlash) return { date: `${matchYmdSlash[1]}-${matchYmdSlash[2]}-${matchYmdSlash[3]}`, err: "" };
+            let matchDash = /^(\d{2})-(\d{2})-(\d{4})$/.exec(val);
+            if (matchDash) return { date: `${matchDash[3]}-${matchDash[2]}-${matchDash[1]}`, err: "" };
+
+            return { date: "", err: "invalid_effective_date_format" };
+        }
+
+        // Sentence Deduplication
+        function deduplicateSentences(text) {
+            if (!text) return "";
+            let sentences = text.split(/(?<=[.!?])\s+/);
+            let uniqueSentences = [];
+            for (let s of sentences) {
+                let clean = s.trim();
+                if (clean && !uniqueSentences.includes(clean)) {
+                    uniqueSentences.push(clean);
+                }
+            }
+            return uniqueSentences.join(" ");
+        }
+
+        // Execute pipeline
+        runBtn.addEventListener('click', async () => {
+            if (!rawData) return;
+            
+            // Get configurations
+            const allowedDocIds = configAllowedDocs.value.split(',').map(s => s.trim()).filter(Boolean);
+            const hrCutoff = configHrCutoff.value;
+            const accessCutoff = configAccessCutoff.value;
+            const minChunkLen = parseInt(configMinChunk.value) || 8;
+            const maxChunkLen = parseInt(configMaxChunk.value) || 1000;
+            const toggleDedup = configRuleDedup.checked;
+            const togglePhone = configRulePhone.checked;
+            const toggleRefund = configRuleRefund.checked;
+            const toggleTimestamp = configRuleTimestamp.checked;
+
+            // Speed values
+            const speedVal = parseInt(document.getElementById('config-sim-speed').value);
+            let rowDelay = 0;
+            let phaseDelay = 0;
+            if (speedVal === 3) { rowDelay = 150; phaseDelay = 1200; }
+            else if (speedVal === 2) { rowDelay = 50; phaseDelay = 700; }
+            else if (speedVal === 1) { rowDelay = 10; phaseDelay = 400; }
+            else { rowDelay = 0; phaseDelay = 0; }
+
+            // Lock buttons
+            runBtn.disabled = true;
+            document.querySelectorAll('.sidebar-config-content input').forEach(el => el.disabled = true);
+            document.getElementById('config-sim-speed').disabled = true;
+            resetBtn.disabled = true;
+            downloadBtn.disabled = true;
+            pipelineProgressBar.style.width = '0%';
+
+            runTimer();
+            writeLog("Khởi động động cơ xử lý dữ liệu Observability Engine...", 'info');
+
+            let cleaned = [];
+            let quarantined = [];
+            let seenTexts = new Set();
+            let seq = 0;
+
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            // Step 1: Ingestion
+            await sleep(phaseDelay);
+            pipelineProgressBar.style.width = '25%';
+            document.getElementById('node-ingest').classList.add('active');
+            document.getElementById('sub-ingest').innerHTML = `<span style="color: var(--primary); font-weight: 600;">Processing...</span>`;
+            writeLog(`[Node 1 Ingestion] Đang tải ${rawData.length} bản ghi thô từ JSON...`, 'info');
+
+            await sleep(phaseDelay);
+            document.getElementById('node-ingest').classList.remove('active');
+            document.getElementById('node-ingest').classList.add('completed');
+            document.getElementById('sub-ingest').innerHTML = `<span style="color: #059669; font-weight: 600;">Load xong (${rawData.length} rows)</span>`;
+            document.getElementById('conn-1').classList.add('completed');
+            writeLog(`Tải tệp thành công. Cấu hình Allowed Doc IDs: [${allowedDocIds.join(', ')}]`, 'ok');
+
+            // Step 2: Clean & Transform
+            await sleep(phaseDelay);
+            pipelineProgressBar.style.width = '50%';
+            document.getElementById('node-clean').classList.add('active');
+            document.getElementById('conn-2').classList.add('active');
+            document.getElementById('sub-clean').innerHTML = `<span style="color: var(--primary); font-weight: 600;">Cleaning...</span>`;
+            writeLog(`[Node 2 Clean] Áp dụng các quy tắc lọc trùng lặp và làm sạch text...`, 'info');
+
+            for (let idx = 0; idx < rawData.length; idx++) {
+                let raw = rawData[idx];
+                let doc_id = raw.doc_id || "";
+                let text = raw.chunk_text || "";
+                let eff_raw = raw.effective_date || "";
+                let exp_raw = raw.exported_at || "";
+
+                if (rowDelay > 0) {
+                    await sleep(rowDelay);
+                }
+
+                // Rule A: Allowlist check
+                if (!allowedDocIds.includes(doc_id)) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id || "MISSING",
+                        reason: "unknown_doc_id",
+                        raw_value: doc_id || "[Trống rỗng]",
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1}: doc_id lạ "${doc_id || '[Trống]'}"`, 'warn');
+                    continue;
+                }
+
+                // Rule B: Normalizing effective date
+                let { date: eff_norm, err: eff_err } = cleanDate(eff_raw);
+                if (eff_err === "empty_effective_date") {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "missing_effective_date",
+                        raw_value: "[Trống rỗng]",
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Thiếu ngày hiệu lực (effective_date)`, 'warn');
+                    continue;
+                }
+                if (eff_err === "invalid_effective_date_format") {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "invalid_effective_date_format",
+                        raw_value: eff_raw,
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Định dạng ngày hiệu lực sai: "${eff_raw}"`, 'warn');
+                    continue;
+                }
+
+                // Rule C: Versioning date check
+                if (doc_id === "hr_leave_policy" && hrCutoff && eff_norm < hrCutoff) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "stale_hr_leave_policy_effective_date",
+                        raw_value: `Effective: ${eff_norm} (Cutoff: ${hrCutoff})`,
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Ngày hiệu lực cũ: ${eff_norm} < cutoff ${hrCutoff}`, 'warn');
+                    continue;
+                }
+                if (doc_id === "access_control_sop" && accessCutoff && eff_norm < accessCutoff) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "stale_access_control_sop_effective_date",
+                        raw_value: `Effective: ${eff_norm} (Cutoff: ${accessCutoff})`,
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Ngày hiệu lực cũ: ${eff_norm} < cutoff ${accessCutoff}`, 'warn');
+                    continue;
+                }
+
+                // Rule D: Clean text body
+                let fixed_text = text.trim();
+                let appliedPhone = false;
+                let appliedRefund = false;
+                let appliedDedup = false;
+
+                if (fixed_text.startsWith("Nội dung không rõ ràng:")) {
+                    fixed_text = fixed_text.substring("Nội dung không rõ ràng:".length).trim();
+                }
+                fixed_text = fixed_text.replace(/^[! ]+|[! ]+$/g, "");
+                fixed_text = fixed_text.replace(/(làm việc\s+)+làm việc/g, "làm việc");
+                
+                fixed_text = fixed_text.replace(/<\/?[^>]+(>|$)/g, "");
+                fixed_text = fixed_text.replace(/([$#*!~-]){3,}/g, "$1");
+                fixed_text = fixed_text.replace(/\s+/g, " ");
+
+                if (toggleDedup) {
+                    let old_t = fixed_text;
+                    fixed_text = deduplicateSentences(fixed_text);
+                    if (old_t !== fixed_text) appliedDedup = true;
+                }
+
+                if (togglePhone) {
+                    let old_t = fixed_text;
+                    fixed_text = fixed_text.replace(/\bext\.\s*(\d+)\b/gi, "extension $1");
+                    if (old_t !== fixed_text) appliedPhone = true;
+                }
+
+                if (toggleRefund && doc_id === "policy_refund_v4" && fixed_text.includes("Ngoại lệ không được hoàn tiền")) {
+                    fixed_text = fixed_text.replace("Ngoại lệ không được hoàn tiền:", "Ngoại lệ (các loại sản phẩm bị loại khỏi điều kiện hoàn tiền):");
+                    appliedRefund = true;
+                }
+
+                if (!fixed_text) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "missing_chunk_text",
+                        raw_value: "[Rỗng sau khi làm sạch]",
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Chunk rỗng sau khi làm sạch`, 'warn');
+                    continue;
+                }
+
+                if (doc_id === "hr_leave_policy" && (fixed_text.includes("10 ngày phép năm") || fixed_text.includes("10 ngày làm việc phép năm"))) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "stale_hr_policy_text",
+                        raw_value: `"10 ngày phép năm" detected`,
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Phát hiện chính sách phép năm 10 ngày cũ đã hết hiệu lực`, 'warn');
+                    continue;
+                }
+
+                let key = fixed_text.toLowerCase().trim();
+                if (seenTexts.has(key)) {
+                    quarantined.push({
+                        index: idx + 1,
+                        doc_id: doc_id,
+                        reason: "duplicate_chunk_text",
+                        raw_value: text.substring(0, 40) + "...",
+                        original: raw
+                    });
+                    writeLog(`[Quarantine] Dòng ${idx + 1} (${doc_id}): Trùng lặp nội dung chunk văn bản`, 'warn');
+                    continue;
+                }
+                seenTexts.add(key);
+
+                let appliedRefundWindow = false;
+                if (doc_id === "policy_refund_v4" && fixed_text.includes("14 ngày làm việc")) {
+                    fixed_text = fixed_text.replace("14 ngày làm việc", "7 ngày làm việc") + " [cleaned: stale_refund_window]";
+                    appliedRefundWindow = true;
+                }
+
+                let exp_norm = exp_raw.trim();
+                let appliedTS = false;
+                if (toggleTimestamp && exp_raw.includes("/")) {
+                    exp_norm = exp_raw.replace(/\//g, "-");
+                    appliedTS = true;
+                }
+
+                seq++;
+                cleaned.push({
+                    chunk_id: `${doc_id}_${seq}`,
+                    doc_id: doc_id,
+                    chunk_text: fixed_text,
+                    effective_date: eff_norm,
+                    exported_at: exp_norm
+                });
+
+                writeLog(`[Clean] Dòng ${idx + 1} (${doc_id}): Hợp lệ. Sinh chunk_id: ${doc_id}_${seq}`, 'ok');
+                if (appliedDedup) writeLog(`  └─ [Normalize] Khử câu lặp lại liên tục trong nội dung`, 'info');
+                if (appliedPhone) writeLog(`  └─ [Normalize] Chuẩn hóa hotline extension "ext." sang "extension"`, 'info');
+                if (appliedRefund) writeLog(`  └─ [Normalize] Enrich từ khóa ngoại lệ không hoàn tiền RAG`, 'info');
+                if (appliedRefundWindow) writeLog(`  └─ [Normalize] Sửa stale refund window 14 ngày thành 7 ngày`, 'info');
+                if (appliedTS) writeLog(`  └─ [Normalize] Chuẩn hóa export timestamp slashes thành dashes`, 'info');
+            }
+
+            writeLog(`[Node 2 Clean] Quá trình hoàn tất: Sinh ra ${cleaned.length} dòng sạch, cách ly ${quarantined.length} dòng lỗi.`, 'ok');
+            renderQuarantine(quarantined);
+
+            document.getElementById('node-clean').classList.remove('active');
+            document.getElementById('node-clean').classList.add('completed');
+            document.getElementById('sub-clean').innerHTML = `<span style="color: #059669; font-weight: 600;">Cleaned (${cleaned.length} rows)</span>`;
+            document.getElementById('conn-2').classList.remove('active');
+            document.getElementById('conn-2').classList.add('completed');
+
+            // Step 3: Quality Check
+            await sleep(phaseDelay);
+            pipelineProgressBar.style.width = '75%';
+            document.getElementById('node-validate').classList.add('active');
+            document.getElementById('conn-3').classList.add('active');
+            document.getElementById('sub-validate').innerHTML = `<span style="color: var(--primary); font-weight: 600;">Validating...</span>`;
+            writeLog(`[Node 3 Verification] Tiến hành kiểm định Expectations Suite...`, 'info');
+
+            let validations = {
+                E1: cleaned.length >= 1,
+                E2: cleaned.every(r => r.doc_id && r.doc_id.trim() !== ""),
+                E3: cleaned.every(r => !(r.doc_id === "policy_refund_v4" && r.chunk_text.includes("14 ngày làm việc"))),
+                E4: cleaned.every(r => r.chunk_text.length >= minChunkLen),
+                E5: cleaned.every(r => /^\d{4}-\d{2}-\d{2}$/.test(r.effective_date)),
+                E6: cleaned.every(r => !(r.doc_id === "hr_leave_policy" && r.chunk_text.includes("10 ngày phép năm"))),
+                E7: allowedDocIds.every(id => cleaned.some(r => r.doc_id === id)),
+                E8: cleaned.every(r => !r.chunk_text.includes("!!!") && !r.chunk_text.includes("làm việc làm việc")),
+                E9: validateRowsPydanticDetails(cleaned, allowedDocIds, minChunkLen, maxChunkLen).passed,
+                E10: cleaned.every(r => /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}$/.test(r.exported_at)),
+                E11: cleaned.every(r => r.chunk_text.length <= maxChunkLen),
+                E12: (() => {
+                    let ids = cleaned.map(r => r.chunk_id);
+                    return ids.length === new Set(ids).size;
+                })()
+            };
+
+            suiteGrid.innerHTML = '';
+            initialExpectations.forEach(exp => {
+                let passed = validations[exp.id];
+                let statusClass = passed ? 'passed' : 'failed';
+                let badgeText = passed ? 'passed' : 'failed';
+                if (exp.severity === 'warn' && !passed) {
+                    statusClass = 'failed';
+                    badgeText = 'warning';
+                }
+
+                let statText = "";
+                if (exp.id === "E1") statText = `Kiểm định số lượng bản ghi: ${cleaned.length} dòng.`;
+                else if (exp.id === "E4") {
+                    const minVal = cleaned.length ? Math.min(...cleaned.map(r => r.chunk_text.length)) : 0;
+                    statText = `Yêu cầu >= ${minChunkLen}. Độ dài nhỏ nhất đo được: ${minVal} kí tự.`;
+                } else if (exp.id === "E11") {
+                    const maxVal = cleaned.length ? Math.max(...cleaned.map(r => r.chunk_text.length)) : 0;
+                    statText = `Yêu cầu <= ${maxChunkLen}. Độ dài lớn nhất đo được: ${maxVal} kí tự.`;
+                } else if (exp.id === "E9") {
+                    const pydanticRes = validateRowsPydanticDetails(cleaned, allowedDocIds, minChunkLen, maxChunkLen);
+                    if (pydanticRes.passed) {
+                        statText = "Tất cả các bản ghi đều vượt qua xác thực Pydantic Model Schema.";
+                    } else {
+                        statText = `<div style="color: var(--danger); font-weight: 700; margin-bottom: 0.35rem;">Có ${pydanticRes.errors.length} dòng vi phạm Pydantic schema:</div>`;
+                        pydanticRes.errors.slice(0, 5).forEach(err => {
+                            statText += `<div style="font-family: 'JetBrains Mono'; font-size: 0.65rem; padding-left: 0.5rem; color: #7f1d1d; margin-top: 0.2rem;">
+                                Row ${err.index} (${err.chunk_id || 'no-id'}):<br>
+                                ${err.details.map(d => ` • ${d}`).join('<br>')}
+                            </div>`;
+                        });
+                        if (pydanticRes.errors.length > 5) {
+                            statText += `<div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.2rem; font-style: italic; padding-left: 0.5rem;">... và ${pydanticRes.errors.length - 5} lỗi khác</div>`;
+                        }
+                    }
+                } else {
+                    statText = passed ? "Tất cả các bản ghi đều vượt qua xác thực." : "Có bản ghi vi phạm hợp đồng dữ liệu!";
+                }
+
+                suiteGrid.innerHTML += `
+                    <div class="suite-card ${statusClass}" id="suite-${exp.id}">
+                        <div class="suite-card-header">
+                            <div class="suite-left">
+                                <span class="suite-name" style="color: ${passed ? '#1e293b' : (exp.severity === 'warn' ? 'var(--warning)' : 'var(--danger)')}">${exp.id}: ${exp.name}</span>
+                                <span class="suite-desc">${exp.desc} (${exp.severity})</span>
+                            </div>
+                            <span class="suite-badge ${badgeText}" id="badge-${exp.id}">${badgeText}</span>
+                        </div>
+                        <div class="suite-card-detail">
+                            <div><strong>Assertion Rule Logic:</strong></div>
+                            <div class="suite-code-pre">${exp.code}</div>
+                            <div>Trạng thái thực thi: ${statText}</div>
+                        </div>
+                    </div>
+                `;
+
+                if (passed) {
+                    writeLog(`Expectation [${exp.name}] PASS (${exp.severity})`, 'ok');
+                } else {
+                    if (exp.severity === 'warn') {
+                        writeLog(`Expectation [${exp.name}] WARNING (${exp.severity})`, 'warn');
+                    } else {
+                        writeLog(`Expectation [${exp.name}] FAILED (${exp.severity})`, 'err');
+                    }
+                }
+            });
+
+            document.getElementById('node-validate').classList.remove('active');
+            document.getElementById('node-validate').classList.add('completed');
+            document.getElementById('sub-validate').innerHTML = `<span style="color: #059669; font-weight: 600;">Expectations passed</span>`;
+            document.getElementById('conn-3').classList.remove('active');
+            document.getElementById('conn-3').classList.add('completed');
+
+            // Step 4: Publish Output
+            await sleep(phaseDelay);
+            pipelineProgressBar.style.width = '100%';
+            document.getElementById('node-embed').classList.add('active');
+            document.getElementById('sub-embed').innerHTML = `<span style="color: var(--primary); font-weight: 600;">Publishing...</span>`;
+            writeLog(`[Node 4 Publish] Đang tổng hợp manifest dữ liệu sạch...`, 'info');
+
+            processedData = {
+                run_id: `run-center-${Date.now()}`,
+                run_timestamp: new Date().toISOString(),
+                config: {
+                    allowed_docs: allowedDocIds,
+                    hr_cutoff_date: hrCutoff,
+                    access_cutoff_date: accessCutoff,
+                    min_chunk_length: minChunkLen,
+                    max_chunk_length: maxChunkLen
+                },
+                summary: {
+                    raw_records: rawData.length,
+                    cleaned_records: cleaned.length,
+                    quarantine_records: quarantined.length
+                },
+                cleaned: cleaned,
+                quarantined: quarantined
+            };
+
+            animateValue('val-raw', 0, processedData.summary.raw_records, 800);
+            animateValue('val-clean', 0, processedData.summary.cleaned_records, 800);
+            animateValue('val-quar', 0, processedData.summary.quarantine_records, 800);
+
+            drawChart(cleaned);
+            jsonPreArea.innerHTML = highlightJSON(processedData);
+
+            document.getElementById('node-embed').classList.remove('active');
+            document.getElementById('node-embed').classList.add('completed');
+            document.getElementById('sub-embed').innerHTML = `<span style="color: #059669; font-weight: 600;">Published</span>`;
+
+            stopTimer();
+            document.querySelectorAll('.sidebar-config-content input').forEach(el => el.disabled = false);
+            document.getElementById('config-sim-speed').disabled = false;
+            resetBtn.disabled = false;
+            downloadBtn.disabled = false;
+
+            computeFreshnessSLA(cleaned);
+
+            writeLog(`[SUCCESS] Pipeline thực thi hoàn tất trong thời gian ${largeTimer.textContent}.`, 'ok');
+        });
+
+        function computeFreshnessSLA(cleaned) {
+            if (!cleaned || cleaned.length === 0) {
+                freshnessBadge.textContent = "FRESHNESS: SLA PENDING";
+                freshnessBadge.style.color = "#b45309";
+                freshnessBadge.style.borderColor = "#cbd5e1";
+                return;
+            }
+
+            const latestDate = cleaned.reduce((max, row) => {
+                const d = parseDateString(row.exported_at);
+                return d > max ? d : max;
+            }, new Date(0));
+
+            const ageMs = EVAL_NOW - latestDate;
+            const ageHours = ageMs / (1000 * 3600);
+            
+            const ingestSLAHours = 24.0;
+            const ingestPercentage = Math.min((ageHours / ingestSLAHours) * 100, 100);
+            
+            ingestFreshnessFill.style.width = `${ingestPercentage}%`;
+            
+            if (ageHours > ingestSLAHours) {
+                ingestFreshnessFill.className = "bound-fill danger-fill";
+                ingestFreshnessVal.textContent = `${ageHours.toFixed(1)}h (QUÁ HẠN!)`;
+                ingestFreshnessVal.style.color = "var(--danger)";
+            } else {
+                ingestFreshnessFill.className = "bound-fill";
+                ingestFreshnessVal.textContent = `${ageHours.toFixed(1)}h (Đạt SLA)`;
+                ingestFreshnessVal.style.color = "#059669";
+            }
+
+            const publishAgeHours = 0.0;
+            const publishSLAHours = 1.0;
+            const publishPercentage = Math.min((publishAgeHours / publishSLAHours) * 100, 100);
+            
+            publishFreshnessFill.style.width = `${publishPercentage}%`;
+            publishFreshnessFill.className = "bound-fill";
+            publishFreshnessVal.textContent = `${publishAgeHours.toFixed(2)}h (Đạt SLA)`;
+            publishFreshnessVal.style.color = "#059669";
+
+            if (ageHours > ingestSLAHours) {
+                freshnessBadge.textContent = "FRESHNESS: INGEST SLA FAIL";
+                freshnessBadge.style.color = "#b91c1c";
+                freshnessBadge.style.borderColor = "#fca5a5";
+                
+                freshnessWidgetStatus.textContent = "INGEST SLA VIOLATED";
+                freshnessWidgetStatus.className = "freshness-status fail";
+            } else {
+                freshnessBadge.textContent = "FRESHNESS: SLA PASS";
+                freshnessBadge.style.color = "#047857";
+                freshnessBadge.style.borderColor = "#a7f3d0";
+
+                freshnessWidgetStatus.textContent = "ALL BOUNDARIES PASS";
+                freshnessWidgetStatus.className = "freshness-status pass";
+            }
+        }
+
+        function renderQuarantine(quarantined) {
+            if (quarantined.length > 0) {
+                quarTableBody.innerHTML = '';
+                quarantined.forEach((q, qidx) => {
+                    quarTableBody.innerHTML += `
+                        <tr>
+                            <td><strong>${q.index}</strong></td>
+                            <td><code style="font-family: 'JetBrains Mono';">${q.doc_id}</code></td>
+                            <td><span class="badge-reason ${q.reason}">${q.reason}</span></td>
+                            <td>
+                                <button class="btn-inspect" onclick="inspectQuarantineItem(${qidx})">Inspect</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                quarTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem 0;">Tuyệt vời! Không phát hiện bất kỳ dòng nào bị cách ly!</td></tr>`;
+            }
+        }
+
+        window.inspectQuarantineItem = function(qidx) {
+            if (!processedData || !processedData.quarantined[qidx]) return;
+            const q = processedData.quarantined[qidx];
+            
+            let message = "";
+            if (q.reason === "unknown_doc_id") {
+                message = "Trường doc_id không thuộc danh sách nguồn được phê duyệt.";
+            } else if (q.reason === "missing_effective_date") {
+                message = "Trường effective_date bị bỏ trống hoặc null.";
+            } else if (q.reason === "invalid_effective_date_format") {
+                message = "Định dạng ngày hiệu lực không đúng chuẩn ISO (YYYY-MM-DD).";
+            } else if (q.reason.includes("stale_hr_leave_policy_effective_date")) {
+                message = `Ngày hiệu lực trước mốc cấu hình (Cutoff HR: ${configHrCutoff.value}).`;
+            } else if (q.reason.includes("stale_access_control_sop_effective_date")) {
+                message = `Ngày hiệu lực trước mốc cấu hình (Cutoff Access: ${configAccessCutoff.value}).`;
+            } else if (q.reason === "stale_hr_policy_text") {
+                message = "Nội dung chứa thông tin phép năm 10 ngày đã hết hiệu lực.";
+            } else if (q.reason === "duplicate_chunk_text") {
+                message = "Nội dung trùng lặp 100% với một chunk đã được nạp trước đó.";
+            } else if (q.reason === "missing_chunk_text") {
+                message = "Bản ghi rỗng sau khi làm sạch ký tự đặc biệt và thẻ HTML.";
+            }
+
+            inspectBody.innerHTML = `
+                <div class="inspect-meta">
+                    <div><strong>Dòng số:</strong> ${q.index}</div>
+                    <div><strong>Nguồn Doc ID:</strong> <code>${q.doc_id}</code></div>
+                    <div><strong>Chẩn đoán lỗi:</strong></div>
+                    <div class="inspect-val-error">${message}</div>
+                </div>
+                <div><strong>Giá trị lỗi ghi nhận:</strong></div>
+                <div class="inspect-pre" style="color: #b45309;">${q.raw_value}</div>
+                <div><strong>Bản ghi gốc đầy đủ:</strong></div>
+                <pre class="inspect-pre">${highlightJSON(q.original)}</pre>
+            `;
+        };
+
+        copyJsonBtn.addEventListener('click', () => {
+            if (!processedData) return;
+            const text = JSON.stringify(processedData, null, 2);
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = copyJsonBtn.textContent;
+                copyJsonBtn.textContent = "✓ Đã sao chép!";
+                copyJsonBtn.style.background = "#d1fae5";
+                copyJsonBtn.style.color = "#065f46";
+                setTimeout(() => {
+                    copyJsonBtn.textContent = originalText;
+                    copyJsonBtn.style.background = "";
+                    copyJsonBtn.style.color = "";
+                }, 1200);
+                writeLog("Đã sao chép manifest JSON vào clipboard.", 'ok');
+            }).catch(err => {
+                writeLog("Lỗi sao chép: " + err, 'err');
+            });
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (!processedData) return;
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(processedData, null, 2));
+            const anchor = document.createElement('a');
+            anchor.setAttribute("href", dataStr);
+            anchor.setAttribute("download", `cleaned_manifest_${processedData.run_id}.json`);
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            writeLog("Tải tệp tin Cleaned JSON thành công.", 'ok');
+        });
+
+        resetBtn.addEventListener('click', () => {
+            rawData = null;
+            processedData = null;
+            stopTimer();
+            largeTimer.textContent = '00:00.000';
+            pipelineProgressBar.style.width = '0%';
+            
+            runBtn.disabled = true;
+            downloadBtn.disabled = true;
+            fileInfoBox.style.display = 'none';
+            dropZone.classList.remove('active-file');
+            fileInput.value = "";
+            
+            document.getElementById('file-size').textContent = "0 KB";
+            document.getElementById('file-rows').textContent = "0";
+            document.getElementById('file-modified').textContent = "-";
+            document.getElementById('config-sim-speed').value = "1";
+            document.getElementById('config-sim-speed').disabled = false;
+
+            freshnessBadge.textContent = "FRESHNESS: SLA PENDING";
+            freshnessBadge.style.color = "#b45309";
+            freshnessBadge.style.borderColor = "#cbd5e1";
+
+            valRaw.textContent = '0';
+            valClean.textContent = '0';
+            valQuar.textContent = '0';
+            jsonPreArea.innerHTML = "// Đang đợi tải tệp và nhấn nút chạy...";
+            
+            ingestFreshnessFill.style.width = "0%";
+            ingestFreshnessVal.textContent = "Chưa đo";
+            ingestFreshnessVal.style.color = "";
+            publishFreshnessFill.style.width = "0%";
+            publishFreshnessVal.textContent = "Chưa đo";
+            publishFreshnessVal.style.color = "";
+            freshnessWidgetStatus.textContent = "Chờ chạy...";
+            freshnessWidgetStatus.className = "freshness-status";
+
+            const nodes = ['node-ingest', 'node-clean', 'node-validate', 'node-embed'];
+            const conns = ['conn-1', 'conn-2', 'conn-3'];
+            
+            nodes.forEach(node => {
+                document.getElementById(node).className = 'flow-step';
+            });
+            conns.forEach(conn => {
+                document.getElementById(conn).className = 'flow-line';
+            });
+            
+            document.getElementById('sub-ingest').textContent = 'Chờ nạp tệp';
+            document.getElementById('sub-clean').textContent = 'Lọc & chuẩn hóa';
+            document.getElementById('sub-validate').textContent = 'Expectations Suite';
+            document.getElementById('sub-embed').textContent = 'Manifest Output';
+
+            renderExpectationsPending();
+            drawChart(null);
+
+            quarTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem 0;">Chưa có dữ liệu quarantine. Vui lòng nạp và chạy pipeline.</td></tr>`;
+            inspectBody.innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 3.5rem; font-size: 0.7rem;">Chọn một dòng bị cách ly bên cạnh để kiểm định chi tiết lỗi dữ liệu.</div>`;
+            
+            allLogs = [];
+            writeLog("Observability System Reset. Awaiting JSON upload...", 'info');
+        });
+    </script>
+</body>
+</html>

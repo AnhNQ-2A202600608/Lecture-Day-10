@@ -31,6 +31,11 @@ from transform.cleaning_rules import clean_rows, load_raw_csv, write_cleaned_csv
 
 load_dotenv()
 
+import sys
+if sys.platform.startswith('win'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 ROOT = Path(__file__).resolve().parent
 RAW_DEFAULT = ROOT / "data" / "raw" / "policy_export_dirty.csv"
 ART = ROOT / "artifacts"
@@ -48,7 +53,7 @@ def _log(path: Path, line: str) -> None:
 
 def cmd_run(args: argparse.Namespace) -> int:
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%MZ")
-    raw_path = Path(args.raw)
+    raw_path = Path(args.raw).resolve()
     if not raw_path.is_file():
         print(f"ERROR: raw file not found: {raw_path}", file=sys.stderr)
         return 1

@@ -1,293 +1,207 @@
-# Lab Day 10 — Data Pipeline & Data Observability
+# Hướng Dẫn Chi Tiết Hệ Thống Data Pipeline & Data Observability (Lab Day 10)
 
-**Môn:** AI in Action (AICB-P1)  
-**Chủ đề:** ETL / cleaning / expectation suite / embed / freshness / before-after evidence  
-**Thời gian:** 4 giờ (4 sprints × ~60 phút)  
-**Tiếp nối:** Day 08 RAG · Day 09 Multi-agent — **cùng case CS + IT Helpdesk**, hôm nay làm **tầng dữ liệu** trước khi agent "đọc đúng version".
+Hệ thống này được xây dựng để giải quyết bài toán Ingestion, Observability và Quality Check cho dữ liệu tài liệu trước khi đưa vào hệ thống RAG (Retrieval-Augmented Generation). 
 
-**Slide:** [`../lecture-10.html`](../lecture-10.html)
+Dưới đây là tài liệu đặc tả toàn diện về cấu trúc thư mục, chức năng từng file, logic nghiệp vụ chi tiết, và cách vận hành hệ thống.
 
 ---
 
-## Bối cảnh
+## 1. Bản Đồ Thư Mục & Vai Trò Các File (Directory Architecture)
 
-Vector store và agent Day 09 chỉ ổn nếu **pipeline ingest → clean → validate → publish** ổn. Lab này mô phỏng:
+### 1.1. Tầng Entrypoint & Khởi Chạy
+*   **[etl_pipeline.py](etl_pipeline.py)**: 
+    *   *Chức năng*: Entrypoint chính điều phối toàn bộ vòng đời pipeline: `Tải CSV thô (Ingest) -> Làm sạch & Cách ly (Clean/Quarantine) -> Kiểm định chất lượng (Expectation Suite) -> Embedding & Dọn dẹp DB (Embed/Prune) -> Xuất Manifest`.
+    *   *Xử lý*: Hỗ trợ CLI nhận các lệnh `run` (chạy pipeline) và `freshness` (giám sát độ tươi). Tự động cấu hình mã hóa UTF-8 cho dòng đầu ra trên Windows (`sys.stdout.reconfigure`) để tránh lỗi encoding khi in ký tự tiếng Việt.
+*   **[pipeline_ui.html](pipeline_ui.html)**:
+    *   *Chức năng*: Cổng thông tin Telemetry & Observability trực quan hóa toàn bộ luồng pipeline dưới dạng đồ họa Light-Mode cao cấp, hỗ trợ tương tác và thử nghiệm mô phỏng client-side.
+    *   *Xử lý*: Cho phép kéo thả file JSON bẩn, tinh chỉnh cấu hình tham số động, chạy mô phỏng 4 bước với đường truyền dữ liệu động, hiển thị biểu đồ phân phối SVG, quản lý cách ly dữ liệu thô (Quarantine Inspector), kiểm định chi tiết schema Pydantic và tải console logs.
 
-- Export "raw" từ **5 hệ thống nguồn** (CSV mẫu) có **duplicate**, **dòng thiếu ngày**, **doc_id lạ**, **ngày hiệu lực không ISO**, **xung đột version HR (10 vs 12 ngày phép)**, **chunk policy sai cửa sổ hoàn tiền (14 vs 7 ngày)**, và **nguồn dữ liệu chưa được đăng ký trong pipeline**.
-- Pipeline baseline được cung cấp nhưng **chưa hoàn chỉnh** — học viên phải phân tích dữ liệu raw, phát hiện lỗ hổng trong code, sửa và mở rộng pipeline để embed **toàn bộ** dữ liệu cần thiết vào vector database.
-- Nhóm phải có **log số record**, **quarantine**, **expectation halt có kiểm soát**, **run_id** trên manifest, và **bằng chứng before/after** trên retrieval test.
+### 1.2. Tầng Nghiệp Vụ Core (Core Processing Modules)
+*   **[transform/cleaning_rules.py](transform/cleaning_rules.py)**:
+    *   *Chức năng*: Chứa toàn bộ các hàm lọc (filters), chuẩn hóa (normalizations), khử trùng lặp (deduplications) dữ liệu, và cách ly (quarantining) các dòng dữ liệu không đạt chuẩn.
+    *   *Logic*: Áp dụng regex phức tạp và các so sánh logic ngày tháng động, gán Context Title làm tiền tố cho mỗi chunk nhằm tăng chất lượng retrieval.
+*   **[quality/expectations.py](quality/expectations.py)**:
+    *   *Chức năng*: Định nghĩa và thực thi bộ quy tắc kỳ vọng chất lượng (Expectation Suite) gồm 12 tiêu chí kiểm soát.
+    *   *Logic*: Tích hợp kiểm định cấu trúc dữ liệu bằng mô hình **Pydantic Model Validation (`CleanedRow`)** thật. Phân loại nghiêm ngặt giữa lỗi ngắt pipeline (`halt`) và lỗi cảnh báo chất lượng (`warn`).
+*   **[monitoring/freshness_check.py](monitoring/freshness_check.py)**:
+    *   *Chức năng*: Đánh giá độ trễ và độ tươi mới (Data Freshness) của luồng thông tin.
+    *   *Logic*: Phân tích tệp Manifest để kiểm tra SLA tại 2 ranh giới (Ingestion Boundary vs Publish Boundary) độc lập.
+
+### 1.3. Tầng Cấu Hình & Hợp Đồng Dữ Liệu
+*   **[contracts/data_contract.yaml](contracts/data_contract.yaml)**:
+    *   *Chức năng*: Định nghĩa hợp đồng dữ liệu chuẩn của hệ thống bao gồm: Owner thông tin, cấu hình Allowed Doc IDs, ngưỡng thời hạn SLA Freshness, và mốc giới hạn phiên bản (`policy_versioning`) cho từng loại tài liệu.
+
+### 1.4. Tầng Kiểm Thử & Chấm Điểm (Verification & Evaluation)
+*   **[eval_retrieval.py](eval_retrieval.py)**:
+    *   *Chức năng*: Thực hiện kiểm thử khả năng truy vấn thông tin (Retrieval Evaluation) dựa trên bộ câu hỏi tự kiểm `test_questions.json`. Xuất kết quả CSV để so sánh chất lượng.
+*   **[grading_run.py](grading_run.py)**:
+    *   *Chức năng*: Chạy kiểm định 10 câu hỏi đánh giá chính thức từ giảng viên, chấm điểm trực tiếp sự trùng khớp thông tin và ngăn ngừa các chunk chính sách cũ bị lọt vào kết quả.
+*   **[instructor_quick_check.py](instructor_quick_check.py)**:
+    *   *Chức năng*: Script chạy nhanh để giảng viên kiểm tra nhanh định dạng manifest và tính đúng đắn của tệp kết quả `grading_run.jsonl`.
 
 ---
 
-## Mục tiêu học tập
+## 2. Đặc Tả Chi Tiết Logic Nghiệp Vụ (Deep-Dive Business Logic)
 
-| Mục tiêu | Sprint |
-|----------|--------|
-| Phân tích raw data + phát hiện pipeline gaps + sửa pipeline | Sprint 1 |
-| Cleaning rules + cleaned CSV + quarantine + embed | Sprint 1–2 |
-| Expectation suite (≥2 mới) + chạy pipeline thành công | Sprint 2 |
-| Inject corruption + so sánh eval + quality report | Sprint 3 |
-| Freshness check + runbook + hoàn thiện docs & báo cáo | Sprint 4 |
+### 2.1. Logic Làm Sạch Dữ Liệu (`transform/cleaning_rules.py`)
+
+1.  **Lọc nguồn hợp lệ (Allowlist Filter)**:
+    *   Chỉ các bản ghi có `doc_id` thuộc danh sách cho phép (như `policy_refund_v4`, `sla_p1_2026`, `it_helpdesk_faq`, `hr_leave_policy`, `access_control_sop`) được đi tiếp. Các bản ghi lạ hoặc cũ (như `legacy_*`, `invalid_*`) bị đẩy ngay sang Quarantine với lý do `unknown_doc_id`.
+2.  **Chuẩn hóa định dạng ngày tháng (`_normalize_effective_date`)**:
+    *   Sử dụng regex phân tích các định dạng ngày khác nhau:
+        *   ISO Date (`YYYY-MM-DD`) -> Giữ nguyên.
+        *   ISO Datetime (`YYYY-MM-DDThh:mm:ss...`) -> Lấy phần ngày `YYYY-MM-DD`.
+        *   Sử dụng dấu gạch chéo (`DD/MM/YYYY` hoặc `YYYY/MM/DD`) -> Chuyển về định dạng dấu gạch ngang ISO.
+        *   Định dạng ngày Việt Nam (`DD-MM-YYYY`) -> Đảo ngược thứ tự thành `YYYY-MM-DD`.
+    *   Nếu trống rỗng -> Quarantine lý do `missing_effective_date`. Nếu không parse được cấu trúc -> Quarantine lý do `invalid_effective_date_format`.
+3.  **Kiểm tra phiên bản chính sách cũ (Dynamic Cutoff Validation)**:
+    *   Đọc biến môi trường override (ví dụ: `HR_LEAVE_POLICY_CUTOFF_DATE`) hoặc tham chiếu từ `policy_versioning` của Data Contract.
+    *   So sánh ngày hiệu lực đã chuẩn hóa với ngày cutoff. Nếu nhỏ hơn -> Quarantine lý do `stale_<doc_id>_effective_date`.
+4.  **Làm sạch văn bản (Text Sanitization)**:
+    *   Loại bỏ các cụm từ rác sinh ra do xuất lỗi như: `"Nội dung không rõ ràng:"`, hoặc chuỗi dấu chấm than `"!!!"`.
+    *   Sử dụng Regex thay thế các khoảng trắng thừa thành dấu cách đơn.
+    *   **Rule mới 1: Deduplicate câu trùng (`internal_consecutive_sentence_deduplication`)**: Tách chunk thành các câu bằng regex phân tách dấu câu kết hợp kiểm tra độ dài câu, chỉ giữ lại các câu duy nhất không trùng lặp.
+    *   **Rule mới 2: Chuẩn hóa Hotline Extension (`phone_extension_standardization`)**: Định dạng lại các máy lẻ điện thoại từ `ext. <number>` hoặc `ext.<number>` về dạng đồng nhất `extension <number>`.
+    *   **Rule mới 3: Enrichment ngoại lệ hoàn tiền (`refund_exception_enrichment`)**: Làm giàu từ khóa cho tài liệu hoàn tiền kỹ thuật số. Chuyển đổi `"Ngoại lệ không được hoàn tiền:"` thành `"Ngoại lệ (các loại sản phẩm bị loại khỏi điều kiện hoàn tiền):"`.
+5.  **Ngăn ngừa mâu thuẫn phép năm cũ**:
+    *   Cách ly các chunk có `doc_id` là `hr_leave_policy` nhưng văn bản chứa nội dung nghỉ phép `10 ngày` cũ (trong khi quy định mới là 12 ngày) -> Quarantine lý do `stale_hr_policy_text`.
+6.  **Khử trùng lặp chunk (Global Chunk Deduplication)**:
+    *   Sử dụng `seen_text` set lưu mã băm chữ thường của chunk. Các chunk trùng lặp nội dung 100% chỉ giữ lại bản ghi đầu tiên, các bản ghi sau bị cách ly lý do `duplicate_chunk_text`.
+7.  **Sửa lỗi stale window hoàn tiền**:
+    *   Với dữ liệu `policy_refund_v4`, nếu nội dung chứa quy định cũ `14 ngày làm việc`, tự động sửa thành `7 ngày làm việc` và thêm tag `[cleaned: stale_refund_window]`.
+8.  **Chuẩn hóa thời gian xuất bản (`export_timestamp_normalization`)**:
+    *   Đồng bộ hóa dấu `/` thành `-` trong trường `exported_at` để khớp định dạng ISO datetime của Pydantic.
+9.  **Bổ sung tiền tố ngữ cảnh (Context Enrichment)**:
+    *   Chèn mô tả nguồn vào đầu mỗi chunk (ví dụ: `"Chính sách nghỉ phép nhân sự HR (HR leave policy): "` + text) giúp tăng tính tương đồng cosine và đảm bảo retrieval hoạt động tối ưu.
 
 ---
 
-## Nhiệm vụ chính — Pipeline cần sửa gì?
+### 2.2. Logic Kiểm Định Chất Lượng (`quality/expectations.py`)
 
-> **Pipeline baseline chưa hoàn chỉnh.** Dữ liệu raw chứa export từ **5 hệ thống nguồn**, nhưng pipeline hiện tại chỉ nhận diện và xử lý **một phần**. Học viên cần tự phân tích và sửa pipeline để embed đủ dữ liệu, đảm bảo trả lời đúng **tất cả 10 câu hỏi đánh giá** trong `data/grading_questions.json`.
+*   **Pydantic Model Schema Validation**:
+    *   Định nghĩa Pydantic model:
+        ```python
+        class CleanedRow(BaseModel):
+            chunk_id: str = Field(..., min_length=1)
+            doc_id: str = Field(..., min_length=1)
+            chunk_text: str = Field(..., min_length=8)
+            effective_date: date
+            exported_at: datetime
+        ```
+    *   Chạy qua toàn bộ dòng sạch. Bất kỳ lỗi kiểu dữ liệu hoặc vi phạm ràng buộc nào sẽ được ghi lại chi tiết và ngắt pipeline ngay lập tức (`halt`).
+*   **Bộ 12 Quy Tắc Kiểm Định (Expectation Rules)**:
+    *   `min_one_row` (halt): Đầu ra phải có ít nhất 1 bản ghi hợp lệ.
+    *   `no_empty_doc_id` (halt): Không chấp nhận doc_id trống.
+    *   `refund_no_stale_14d_window` (halt): Không được chứa thông tin 14 ngày của chính sách hoàn tiền cũ.
+    *   `chunk_min_length_8` (warn): Cảnh báo nếu có chunk siêu ngắn (< 8 ký tự).
+    *   `effective_date_iso_yyyy_mm_dd` (halt): Kiểm tra định dạng ngày hiệu lực.
+    *   `hr_leave_no_stale_10d_annual` (halt): Không chứa chuỗi thông tin phép năm 10 ngày cũ.
+    *   `min_records_per_doc_id` (halt): Đảm bảo toàn bộ danh sách allowed doc_ids đều có ít nhất 1 chunk được làm sạch và embed (tránh mất mát tài liệu).
+    *   `no_corrupted_symbols` (halt): Bảo vệ DB khỏi ký tự rác (!!!, lặp từ).
+    *   `pydantic_schema_validation` (halt): Kiểm chứng kiểu dữ liệu toàn diện.
+    *   `exported_at_iso_format` (halt): Bảo đảm trường export khớp cấu trúc ISO Datetime.
+    *   `chunk_max_length_1000` (warn): Cảnh báo nếu chunk quá dài (>1000 ký tự) gây tràn ngữ cảnh vector.
+    *   `no_duplicate_chunk_ids` (halt): chunk_id định danh duy nhất.
 
-### Quy trình gợi ý
+---
 
-**Bước 1 — Chạy pipeline lần đầu và quan sát:**
+### 2.3. Logic Giám Sát Độ Tươi Dữ Liệu (`monitoring/freshness_check.py`)
 
+SLA Freshness được đo tại 2 ranh giới độc lập để chẩn đoán chính xác nguyên nhân lỗi hệ thống:
+1.  **Ingestion SLA Boundary (Độ tuổi dữ liệu nguồn)**:
+    *   *Công thức*: `now` - `latest_exported_at` (bản ghi xuất gần nhất).
+    *   *Ngưỡng*: tối đa **24.0 giờ**.
+    *   *Ý nghĩa*: Đảm bảo dữ liệu trích xuất từ các hệ thống ERP/CRM thượng nguồn (Upstream) không quá cũ.
+2.  **Publish SLA Boundary (Độ trễ cập nhật cơ sở dữ liệu)**:
+    *   *Công thức*: `now` - `run_timestamp` (thời điểm chạy và xuất bản manifest).
+    *   *Ngưỡng*: tối đa **1.0 giờ**.
+    *   *Ý nghĩa*: Đảm bảo bộ lập lịch (scheduler/cron-job) chạy pipeline hoạt động đều đặn để đồng bộ cơ sở dữ liệu vector DB.
+
+---
+
+### 2.4. Logic Cập Nhật Cơ Sở Dữ Liệu Vector DB (Idempotency & Pruning)
+
+*   **Upsert Idempotent**: 
+    *   Sử dụng mã `chunk_id` cố định duy nhất làm khóa chính. Khi chạy lại pipeline nhiều lần trên cùng dữ liệu, hệ thống tự động cập nhật đè lên bản cũ chứ không chèn thêm dòng mới, tránh phình dữ liệu.
+*   **Pruning (Xóa vector mồ côi)**:
+    *   Trước khi chèn dữ liệu mới, lấy toàn bộ danh sách `ids` hiện có trong collection Chroma DB. So sánh với danh sách `ids` của run hiện tại để xác định các ID bị loại bỏ (ví dụ: các chunk thuộc tệp bẩn bị đẩy sang quarantine hoặc tài liệu đã bị xóa).
+    *   Chạy câu lệnh `col.delete(ids=drop)` để giải phóng không gian và làm sạch DB.
+
+---
+
+## 3. Giao Diện Người Dùng Telemetry Portal (`pipeline_ui.html`)
+
+Hệ thống được trang bị một giao diện HTML5/CSS3/Vanilla JS Light-Mode trực quan hóa toàn diện:
+
+1.  **Interactive Configuration Panel**: Cho phép người dùng chỉnh sửa danh sách allowed doc_ids, thay đổi ngày cutoff trực quan qua giao diện, và bật/tắt động 4 quy tắc làm sạch dữ liệu.
+2.  **Horizontal Flow Diagram**: Sử dụng SVG vẽ sơ đồ luồng ngang 4 bước của pipeline, hiển thị trạng thái đang xử lý (`active`) và hoàn thành (`completed`) với các xung động di chuyển trên đường nối.
+3.  **Real-time Log Terminal**: Mô phỏng console telemetry của lập trình viên, cho phép lọc logs theo level (`System`, `Success`, `Warnings`, `Errors`), bật/tắt tự động cuộn (Auto-Scroll), dọn dẹp và sao chép log nhanh.
+4.  **SVG Telemetry Charts**: Trực quan hóa số liệu phân bố tài liệu sạch qua biểu đồ cột nằm ngang và hiển thị kiểm định chất lượng SLAs.
+5.  **Quarantine Inspector**: Khi có hàng bị đẩy vào Quarantine, người dùng có thể bấm **Inspect** để xem chi tiết lý do lỗi cấu trúc kèm theo hiển thị JSON nổi bật lỗi.
+6.  **Pydantic Accordion Details**: Trong tab Validation Suite, người dùng có thể nhấp vào bất kỳ Expectation nào để xem mã nguồn assertion logic và kết quả kiểm định chi tiết.
+7.  **Simulation Speed Controller**: Tùy chỉnh thanh trượt tốc độ chạy mô phỏng từ Chậm đến Tức thời.
+
+---
+
+## 4. Các Cải Tiến So Với Bản Gốc (Upgrades & Baseline Comparison)
+
+Dưới đây là bảng đối chiếu chi tiết giữa bộ mã nguồn gốc (Baseline) ban đầu và hệ thống sau khi đã được nâng cấp:
+
+| Thành phần (Component) | Bản gốc (Baseline) | Bản nâng cấp (Our Upgraded System) | Ý nghĩa / Lý do cải tiến (Rationale) |
+| :--- | :--- | :--- | :--- |
+| **Quy Tắc Làm Sạch Dữ Liệu (`cleaning_rules.py`)** | Chỉ chứa các quy tắc làm sạch văn bản và chuẩn hóa ngày tháng cơ bản nhất. Dễ bỏ lọt lỗi lặp từ/lặp câu, không chuẩn hóa hotline máy lẻ, thiếu ngữ cảnh RAG. | Bổ sung 4 quy tắc xử lý chuyên sâu:<br>1. Khử lặp câu liên tiếp trong chunk (`internal_consecutive_sentence_deduplication`) <br>2. Chuẩn hóa máy lẻ hotline (`phone_extension_standardization`) <br>3. Enrich từ khóa hoàn tiền RAG (`refund_exception_enrichment`) <br>4. Chuẩn hóa exported timestamp (`export_timestamp_normalization`). | Giảm nhiễu vector, tối ưu hóa độ tương đồng cosine cho mô hình tìm kiếm RAG và sửa triệt để các câu hỏi góc khó như `gq_d10_02`. |
+| **Cấu hình Cutoff Date** | Ngày giới hạn chính sách được hardcode trực tiếp trong mã nguồn Python. | Hỗ trợ nạp ngày cutoff linh hoạt qua các biến môi trường hệ thống (`*_CUTOFF_DATE`) hoặc yaml contract. | Phân tách cấu hình và logic. Người quản trị có thể thay đổi mốc giới hạn phiên bản mà không cần sửa code và tái deploy hệ thống. |
+| **Expectation Suite (`expectations.py`)** | Bộ kiểm định đơn giản không xác thực kiểu dữ liệu và cấu trúc chặt chẽ. | Tích hợp **Pydantic Model Validation (`CleanedRow`)** thật. Thêm 4 expectations mới: `pydantic_schema_validation`, `exported_at_iso_format`, `chunk_max_length_1000` (warn) và `no_duplicate_chunk_ids` (halt). | Đảm bảo tính toàn vẹn tuyệt đối của kiểu dữ liệu đầu ra và ngăn chặn data corruption trước khi embedding vào DB. |
+| **Freshness Check (`freshness_check.py`)** | Đo lường độ trễ dữ liệu cơ bản ở 1 ranh giới duy nhất. | Đo lường Freshness song song tại **2 boundary độc lập**: Ingestion Boundary (SLA 24h) và Publish Boundary (SLA 1h). | Giúp phân biệt chính xác nguyên nhân dữ liệu cũ: lỗi từ hệ thống thượng nguồn (Upstream) hay do bộ lập lịch pipeline (Scheduler) bị treo. |
+| **Vector DB Idempotency & Prune** | Dễ bị phình dữ liệu hoặc sót vector rác khi chạy lại pipeline nhiều lần trên dữ liệu cũ/mới. | Áp dụng Upsert idempotent bằng chunk_id duy nhất và tự động **Prune** xóa sạch các vector cũ không còn tồn tại trong run hiện tại. | Đảm bảo Vector DB luôn phản ánh chính xác 100% tài liệu hiện tại, loại bỏ hoàn toàn các mảnh dữ liệu cũ gây trả lời sai. |
+| **Giao Diện Telemetry Portal (`pipeline_ui.html`)** | Giao diện tối đơn giản, bố cục dọc dễ bị vỡ khung hình khi màn hình nhỏ, không có tương tác. | Giao diện Light-Mode cao cấp, thanh luồng ngang trực quan chống vỡ, tích hợp **Simulation Speed Control**, **Granular Log Streaming** từng dòng, **biểu đồ SVG tương tác (Tooltip)**, **popovers mô tả bước** và **Pydantic details inspector**. | Mang lại trải nghiệm quan sát telemetry và debug dữ liệu trực quan, sinh động nhất cho kỹ sư vận hành. |
+
+---
+
+## 5. Hướng Dẫn Vận Hành & Khởi Chạy
+
+### 4.1. Chuẩn Bị Môi Trường
 ```bash
-python etl_pipeline.py run
-```
-
-Pipeline sẽ **HALT** do expectation phát hiện dữ liệu chưa sạch. Đọc kỹ log để hiểu lý do.
-
-**Bước 2 — Phân tích dữ liệu raw:**
-
-- Có bao nhiêu `doc_id` **unique** trong `data/raw/policy_export_dirty.csv`?
-- `ALLOWED_DOC_IDS` trong `transform/cleaning_rules.py` chứa những doc_id nào?
-- Có nguồn dữ liệu hợp lệ nào trong CSV bị pipeline **bỏ qua** (quarantine nhầm) không?
-
-**Bước 3 — Đối chiếu với câu hỏi đánh giá:**
-
-- Mở `data/grading_questions.json`, kiểm tra trường `expect_top1_doc_id` — cần những nguồn nào?
-- So sánh với những gì pipeline hiện tại cho phép — thiếu nguồn nào?
-
-**Bước 4 — Sửa pipeline:**
-
-Cần sửa `transform/cleaning_rules.py` (và có thể cả `quality/expectations.py`):
-1. Cập nhật allowlist nếu phát hiện nguồn hợp lệ bị thiếu.
-2. Thêm cleaning rules để loại bỏ dữ liệu stale (ví dụ: nội dung chính sách cũ vẫn xuất hiện dù ngày export mới).
-3. Thêm ≥ **3 rule mới** và ≥ **2 expectation mới** (xem yêu cầu Sprint 2).
-4. Đảm bảo `python etl_pipeline.py run` **exit 0** — tất cả expectations phải pass.
-
-**Bước 5 — Kiểm tra kết quả:**
-
-```bash
-# Test retrieval tự kiểm (21 câu)
-python eval_retrieval.py --out artifacts/eval/eval_after_fix.csv
-
-# Grading chính thức (10 câu)
-python grading_run.py --out artifacts/eval/grading_run.jsonl
-```
-
-Kiểm tra: `contains_expected` phải `true` và `hits_forbidden` phải `false` cho tất cả câu hỏi.
-
----
-
-## Cấu trúc thư mục
-
-```
-lab/
-├── etl_pipeline.py           # Sprint 1–2: run ingest→clean→validate→embed
-├── eval_retrieval.py         # Sprint 3–4: before/after retrieval (CSV)
-├── grading_run.py            # Grading chính thức — 10 câu đánh giá
-├── instructor_quick_check.py # GV: sanity artifact grading/manifest (tuỳ chọn)
-│
-├── transform/
-│   └── cleaning_rules.py     # ⚠️ Baseline chưa đủ — sinh viên phải sửa + mở rộng
-├── quality/
-│   └── expectations.py       # Baseline expectations — sinh viên thêm ≥2 mới
-├── monitoring/
-│   └── freshness_check.py    # Đọc manifest + SLA đơn giản
-│
-├── contracts/
-│   └── data_contract.yaml    # Contract dữ liệu — điền owner/SLA
-│
-├── data/
-│   ├── docs/                 # 5 tài liệu gốc (policy, SLA, FAQ, HR, access control)
-│   ├── raw/
-│   │   └── policy_export_dirty.csv   # Export bẩn từ 5 hệ thống nguồn
-│   ├── test_questions.json           # 21 câu tự kiểm (retrieval + keyword)
-│   └── grading_questions.json        # 10 câu đánh giá chính thức
-│
-├── artifacts/
-│   ├── logs/
-│   ├── manifests/
-│   ├── quarantine/
-│   ├── cleaned/
-│   └── eval/
-│
-├── docs/
-│   ├── pipeline_architecture.md
-│   ├── data_contract.md
-│   ├── runbook.md
-│   └── quality_report_template.md
-│
-├── reports/
-│   ├── group_report.md
-│   └── individual/
-│       └── template.md
-│
-├── requirements.txt
-└── .env.example
-```
-
----
-
-## Setup
-
-```bash
+# Di chuyển vào thư mục lab
 cd lab
+
+# Tạo môi trường ảo và kích hoạt
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Trên Windows dùng: .venv\Scripts\activate
+
+# Cài đặt thư viện phụ thuộc
 pip install -r requirements.txt
-cp .env.example .env
+
+# Tạo tệp cấu hình môi trường
+copy .env.example .env
 ```
 
-**Lần đầu** SentenceTransformers có thể tải model `all-MiniLM-L6-v2` (~90MB) — cần mạng.
-
----
-
-## Chạy pipeline
-
-### Luồng chuẩn (sau khi đã sửa pipeline)
-
+### 4.2. Chạy Pipeline Chuẩn (Mọi Expectations đều đạt)
 ```bash
-# Chạy toàn bộ: ingest → clean → validate → embed
+# Chạy pipeline, tự động làm sạch, kiểm tra chất lượng và embedding vào DB
 python etl_pipeline.py run
+```
+*Kết quả*: Exit code `0`, pass toàn bộ Expectations, tạo manifests và cập nhật Chroma DB thành công.
 
-# Kiểm tra freshness
+### 4.3. Kiểm Tra Freshness SLA
+```bash
 python etl_pipeline.py freshness --manifest artifacts/manifests/manifest_<run-id>.json
 ```
 
-### Eval retrieval (sau khi đã embed)
-
+### 4.4. Kiểm Thử Inject Lỗi (Sprint 3)
 ```bash
-python eval_retrieval.py --out artifacts/eval/after_fix_eval.csv
-cat artifacts/eval/after_fix_eval.csv
-```
-
-> **Ghi chú eval:** `hits_forbidden` quét **toàn bộ top-k** chunk ghép lại (không chỉ top-1), để phát hiện "câu trả lời nhìn đúng nhưng context vẫn còn chunk stale".  
-> **Index snapshot:** sau mỗi lần `run`, embed **upsert** theo `chunk_id` và **xoá id không còn trong cleaned** để tránh vector cũ làm fail grading.
-
-### Sprint 3 — Inject corruption (embed dữ liệu "xấu", bỏ qua halt)
-
-```bash
+# Tắt sửa lỗi refund, bỏ qua xác thực expectations để đẩy dữ liệu lỗi vào DB
 python etl_pipeline.py run --run-id inject-bad --no-refund-fix --skip-validate
+
+# Đo chất lượng retrieval khi dữ liệu bị lỗi
 python eval_retrieval.py --out artifacts/eval/after_inject_bad.csv
-# So sánh với file eval sau khi chạy lại pipeline chuẩn
 ```
 
-### Grading chính thức (10 câu)
-
+### 4.5. Chạy Chấm Điểm & Kiểm Tra Nhanh
 ```bash
+# Chạy chấm điểm 10 câu hỏi
 python grading_run.py --out artifacts/eval/grading_run.jsonl
+
+# Giảng viên kiểm tra định dạng và kết quả
+python instructor_quick_check.py
 ```
-
-**Giảng viên — kiểm tra nhanh artifact (tuỳ chọn):**
-
-```bash
-python instructor_quick_check.py --grading artifacts/eval/grading_run.jsonl
-python instructor_quick_check.py --manifest artifacts/manifests/manifest_<run-id>.json
-```
-
----
-
-## 4 Sprints (chi tiết)
-
-### Sprint 1 (60') — Phân tích & Ingest
-
-- Đọc `data/raw/policy_export_dirty.csv` — liệt kê các `doc_id` unique, đếm số record mỗi loại.
-- **Chạy pipeline lần đầu** → quan sát HALT → đọc log xác định nguyên nhân.
-- **So sánh** `doc_id` trong CSV vs `ALLOWED_DOC_IDS` trong `cleaning_rules.py` → phát hiện nguồn bị thiếu.
-- **Đối chiếu** `expect_top1_doc_id` trong `grading_questions.json` → xác nhận cần sửa gì.
-- Bắt đầu sửa `cleaning_rules.py`: cập nhật allowlist, thêm rules cho dữ liệu stale.
-- Điền **source map** ngắn trong `docs/data_contract.md` (ít nhất 2 nguồn / failure mode / metric).
-
-**DoD:** Log có `raw_records`, `cleaned_records`, `quarantine_records`, `run_id`. Hiểu tại sao pipeline halt.
-
----
-
-### Sprint 2 (60') — Clean + validate + embed
-
-- Hoàn thiện sửa pipeline: pipeline phải **exit 0** với expectation không halt.
-- Thêm ≥ **3 rule mới** và ≥ **2 expectation mới** (đếm trên file nhận được).
-- **Chống trivial:** mỗi rule/expectation mới phải có **tác động đo được** — ghi trong `reports/group_report.md` bảng *metric_impact* (ví dụ: `quarantine_records` tăng khi inject, `expectation X fail` trước khi fix). Rule chỉ "strip space" mà không đổi số liệu → **trừ điểm**.
-- Đảm bảo embed **idempotent** (upsert `chunk_id` + prune id thừa — baseline đã làm).
-
-**DoD:** `python etl_pipeline.py run` exit 0. `python grading_run.py` → kiểm tra nhanh kết quả.
-
----
-
-### Sprint 3 (60') — Inject corruption & before/after
-
-- Cố ý làm hỏng dữ liệu (`--no-refund-fix --skip-validate`) → lưu eval "xấu".
-- Chạy lại pipeline chuẩn → lưu eval "tốt".
-- Lưu **2 file eval** so sánh + ảnh chụp / đoạn log chứng minh.
-- Hoàn thành quality report theo `docs/quality_report_template.md`.
-
-**DoD:** Có số liệu chứng minh retrieval **tệ hơn** trước fix và **tốt hơn** sau fix.
-
----
-
-### Sprint 4 (60') — Monitoring + docs + báo cáo
-
-- Điền `docs/pipeline_architecture.md`, `docs/data_contract.md`, `docs/runbook.md`.
-- `python etl_pipeline.py freshness --manifest …` — giải thích PASS/WARN/FAIL trong runbook.
-- Chạy `python grading_run.py` lần cuối → verify 10 câu đều pass.
-- Hoàn thành `reports/group_report.md` + mỗi người `reports/individual/[ten].md`.
-
-**DoD:** Grading JSONL hợp lệ. README nhóm có "một lệnh chạy cả pipeline". Peer review 3 câu hỏi ghi trong group report.
-
----
-
-## Deliverables (nộp bài)
-
-| Item | Ghi chú |
-|------|---------|
-| `etl_pipeline.py` + `transform/` + `quality/` + `monitoring/` | Có thể mở rộng file, không xóa entrypoint bắt buộc |
-| `contracts/data_contract.yaml` | Điền owner, SLA, nguồn |
-| `artifacts/logs/`, `manifests/`, `quarantine/`, `eval/` | Ít nhất 1 run "tốt" + evidence inject |
-| `docs/*.md` (3 file + quality report) | Theo template |
-| `reports/group_report.md` | |
-| `reports/individual/*.md` | Mỗi thành viên |
-| `artifacts/eval/grading_run.jsonl` | 10 câu: `gq_d10_01` … `gq_d10_10` |
-
----
-
-## Dữ liệu trong raw CSV
-
-Raw CSV (`data/raw/policy_export_dirty.csv`) chứa export từ nhiều hệ thống. Dưới đây là tham khảo (không phải đáp án — học viên tự phân tích):
-
-| Nguồn dữ liệu | Tài liệu tham khảo | Ghi chú |
-|----------------|---------------------|---------|
-| `policy_refund_v4` | `data/docs/policy_refund_v4.txt` | Có chunk stale "14 ngày" cần fix |
-| `sla_p1_2026` | `data/docs/sla_p1_2026.txt` | SLA và quy trình xử lý sự cố |
-| `it_helpdesk_faq` | `data/docs/it_helpdesk_faq.txt` | FAQ IT nội bộ |
-| `hr_leave_policy` | `data/docs/hr_leave_policy.txt` | Có xung đột version 2025 vs 2026 |
-| `access_control_sop` | `data/docs/access_control_sop.txt` | Quy trình cấp quyền truy cập |
-| `invalid_doc_*`, `legacy_*` | (không có tài liệu) | Export lỗi / hệ thống cũ |
-
-> **Lưu ý:** Không phải tất cả nguồn dữ liệu đều được pipeline baseline xử lý. Học viên cần tự phát hiện và sửa.
-
----
-
-## Phân vai (gợi ý — đồng bộ slide Hands-on 10)
-
-| Vai | Trách nhiệm | Sprint chính |
-|-----|-------------|----------------|
-| **Ingestion Owner** | raw paths, logging, manifest, phân tích doc_id | 1 |
-| **Cleaning / Quality Owner** | `cleaning_rules.py`, `expectations.py`, quarantine | 1–3 |
-| **Embed Owner** | Chroma collection, idempotency, eval, grading verify | 2–3 |
-| **Monitoring / Docs Owner** | freshness, runbook, 3 docs, group report | 4 |
-
----
-
-## Debug order (nhắc từ slide Day 10)
-
-```
-Freshness / version → Volume & errors → Schema & contract → Lineage / run_id → mới đến model/prompt
-```
-
----
-
-## Tài nguyên tham khảo
-
-- Slide: [`../lecture-10.html`](../lecture-10.html)
-- Lab Day 09 (orchestration): [`../../day09/lab/README.md`](../../day09/lab/README.md)
-- Great Expectations (tuỳ chọn nâng cao): https://docs.greatexpectations.io/
-- ChromaDB: https://docs.trychroma.com/

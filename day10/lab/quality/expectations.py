@@ -112,5 +112,122 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
         )
     )
 
+    # E7: Đảm bảo mỗi doc_id trong allowlist có ít nhất 1 dòng được cleaned
+    from transform.cleaning_rules import ALLOWED_DOC_IDS
+    missing_doc_ids = []
+    cleaned_doc_ids = {r.get("doc_id") for r in cleaned_rows if r.get("doc_id")}
+    for allowed_id in ALLOWED_DOC_IDS:
+        if allowed_id not in cleaned_doc_ids:
+            missing_doc_ids.append(allowed_id)
+    ok7 = len(missing_doc_ids) == 0
+    results.append(
+        ExpectationResult(
+            "min_records_per_doc_id",
+            ok7,
+            "halt",
+            f"missing_doc_ids={missing_doc_ids}",
+        )
+    )
+
+    # E8: Đảm bảo không còn ký tự rác (!!!), tiền tố rác, hoặc trùng lặp từ trong cleaned_rows
+    bad_symbols = []
+    for r in cleaned_rows:
+        text = r.get("chunk_text") or ""
+        if "!!!" in text or "Nội dung không rõ ràng:" in text or "làm việc làm việc" in text:
+            bad_symbols.append(r.get("chunk_id"))
+    ok8 = len(bad_symbols) == 0
+    results.append(
+        ExpectationResult(
+            "no_corrupted_symbols",
+            ok8,
+            "halt",
+            f"corrupted_chunks={len(bad_symbols)}",
+        )
+    )
+
+    # E9: Validate schema qua Pydantic model thật (Bonus +2 | Distinction)
+    pydantic_ok, pydantic_errs = validate_rows_pydantic(cleaned_rows)
+    results.append(
+        ExpectationResult(
+            "pydantic_schema_validation",
+            pydantic_ok,
+            "halt",
+            f"validation_errors={len(pydantic_errs)} :: details: {pydantic_errs[:2]}",
+        )
+    )
+
+    # E10: Đảm bảo exported_at đúng định dạng ISO YYYY-MM-DDThh:mm:ss sau clean
+    bad_exported = [
+        r
+        for r in cleaned_rows
+        if not re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}$", (r.get("exported_at") or "").strip())
+    ]
+    ok10 = len(bad_exported) == 0
+    results.append(
+        ExpectationResult(
+            "exported_at_iso_format",
+            ok10,
+            "halt",
+            f"non_iso_exported_rows={len(bad_exported)}",
+        )
+    )
+
+    # E11: Đảm bảo chunk_text không quá dài (> 1000 ký tự) để tối ưu hoá vector (Warn)
+    long_chunks = [r for r in cleaned_rows if len(r.get("chunk_text") or "") > 1000]
+    ok11 = len(long_chunks) == 0
+    results.append(
+        ExpectationResult(
+            "chunk_max_length_1000",
+            ok11,
+            "warn",
+            f"long_chunks={len(long_chunks)}",
+        )
+    )
+
+    # E12: Đảm bảo không trùng lặp chunk_id trong cleaned data
+    chunk_ids = [r.get("chunk_id") for r in cleaned_rows if r.get("chunk_id")]
+    ok12 = len(chunk_ids) == len(set(chunk_ids))
+    results.append(
+        ExpectationResult(
+            "no_duplicate_chunk_ids",
+            ok12,
+            "halt",
+            f"duplicate_count={len(chunk_ids) - len(set(chunk_ids))}",
+        )
+    )
+
     halt = any(not r.passed and r.severity == "halt" for r in results)
     return results, halt
+
+
+def validate_rows_pydantic(cleaned_rows: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
+    """
+    Sử dụng Pydantic Model để xác thực cấu trúc schema và kiểu dữ liệu (Bonus +2).
+    """
+    try:
+        from pydantic import BaseModel, Field, ValidationError
+        from datetime import date, datetime
+        
+        class CleanedRow(BaseModel):
+            chunk_id: str = Field(..., min_length=1)
+            doc_id: str = Field(..., min_length=1)
+            chunk_text: str = Field(..., min_length=8)
+            effective_date: date
+            exported_at: datetime
+            
+        errors = []
+        for i, r in enumerate(cleaned_rows):
+            try:
+                CleanedRow(
+                    chunk_id=r.get("chunk_id", ""),
+                    doc_id=r.get("doc_id", ""),
+                    chunk_text=r.get("chunk_text", ""),
+                    effective_date=r.get("effective_date", ""),
+                    exported_at=r.get("exported_at", "")
+                )
+            except ValidationError as e:
+                errors.append(f"Row {i} (chunk_id={r.get('chunk_id')}): {e.errors()}")
+        return len(errors) == 0, errors
+    except Exception as e:
+        return False, [f"Pydantic validation error: {e}"]
+
